@@ -805,10 +805,10 @@ function render(){
 
   $('#kpis').innerHTML =
     kpi('v','患者总数', R.patients.length, hasFilter ? '点击清空全部筛选' : R.meta.nRows + ' 条销售记录',
-        'all', hasFilter) +
-    kpi('g','在治', c['在治'], pct(c['在治'],n) + ' · 点击筛选', '在治', fS === '在治') +
-    kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],n) + ' · 点击筛选', '断药预警', fS === '断药预警') +
-    kpi('r','脱落', c['脱落'], pct(c['脱落'],n) + ' · 点击筛选', '脱落', fS === '脱落') +
+        'all', hasFilter, 'kpiAll') +
+    kpi('g','在治', c['在治'], pct(c['在治'],n) + ' · 点击筛选', '在治', fS === '在治', 'kpiActive') +
+    kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],n) + ' · 点击筛选', '断药预警', fS === '断药预警', 'kpiWarn') +
+    kpi('r','脱落', c['脱落'], pct(c['脱落'],n) + ' · 点击筛选', '脱落', fS === '脱落', 'kpiDrop') +
     kpi('b','临床诊断待填', todoDiag, pct(todoDiag,n) + ' · 点击筛选', 'todoDiag', fF === 'todo') +
     kpi('','建档异常', I.missingKey.length,
         I.missingKey.length ? '点击查看缺失名单' : '无缺失 · 点击查看', 'missing', false);
@@ -820,15 +820,18 @@ function render(){
 
   /* 分布条 */
   $('#dist').innerHTML =
-    seg('d-g','在治',c['在治'],n) + seg('d-a','断药预警',c['断药预警'],n) + seg('d-r','脱落',c['脱落'],n);
+    seg('d-g','在治',c['在治'],n,'kpiActive') + seg('d-a','断药预警',c['断药预警'],n,'kpiWarn') + seg('d-r','脱落',c['脱落'],n,'kpiDrop');
 
   renderQuality();
   renderTable();
 }
-function kpi(cls, lb, vl, ex, drill, active){
+function kpi(cls, lb, vl, ex, drill, active, tip){
   var cl = cls + (drill ? ' kpi-click' : '') + (active ? ' kpi-active' : '');
-  return '<div class="kpi '+cl+'"'+(drill ? ' data-drill="' + drill + '"' : '') +
-         ' title="' + (drill === 'missing' ? '展开数据质量并跳到缺失名单' : (drill ? '点击筛选明细表' : '')) + '">' +
+  var tp = tip ? ' data-tip="' + tip + '"' : '';
+  var tl = tip ? '' : (drill === 'missing' ? '展开数据质量并跳到缺失名单' : (drill ? '点击筛选明细表' : ''));
+  return '<div class="kpi '+cl+'"'+tp+
+         (drill ? ' data-drill="' + drill + '"' : '') +
+         ' title="' + tl + '">' +
          '<div class="lb">'+lb+'</div><div class="vl">'+vl+'</div><div class="ex">'+ex+'</div></div>';
 }
 /* 指标卡下钻：点卡片 → 明细表按该条件筛选；再点一次取消 */
@@ -859,10 +862,11 @@ function drill(what){
   if (box) box.scrollIntoView({block:'nearest'});
 }
 function pct(a,b){ return (a/b*100).toFixed(1) + '%'; }
-function seg(cls, lb, v, n){
+function seg(cls, lb, v, n, tip){
   if (!v) return '';
   var w = v/n*100;
-  return '<div class="'+cls+'" style="width:'+w+'%" title="'+lb+' '+v+' 人">'+lb+' '+v+'</div>';
+  return '<div class="'+cls+'" style="width:'+w+'%"'+(tip?' data-tip="'+tip+'"':'')+
+         (tip?'':' title="'+lb+' '+v+' 人"')+'>'+lb+' '+v+'</div>';
 }
 
 function renderQuality(){
@@ -920,7 +924,8 @@ function renderTable(){
   /* 表头 */
   $('#thr').innerHTML = COLS.map(function(c){
     var ar = (ST.sortK === c.k) ? '<span class="ar">'+(ST.sortDir>0?'▲':'▼')+'</span>' : '';
-    return '<th data-k="'+c.k+'" class="'+(c.n?'na':'')+'" style="'+(c.n?'text-align:right':'')+'">'+c.t+ar+'</th>';
+    var tip = {firstBuy:'colFirst', lastBuy:'colLast', nextBuy:'colNext'}[c.k];
+    return '<th data-k="'+c.k+'"'+(tip?' data-tip="'+tip+'"':'')+' class="'+(c.n?'na':'')+'" style="'+(c.n?'text-align:right':'')+'">'+c.t+ar+'</th>';
   }).join('');
   Array.prototype.forEach.call(document.querySelectorAll('#thr th'), function(th){
     th.onclick = function(){
@@ -1190,6 +1195,35 @@ var TIPS = {
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
   '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过']
 };
+/* ---------- 看板口径悬浮注释（事件委托，兼容每次渲染重建的元素） ---------- */
+var DEF_TIPS = {
+  kpiAll:    '<span class="t">患者总数 · 患者键</span>患者键 = <b>开票抬头 + 会员电话</b>。<br>同一患者（同抬头＋同电话）的全部购药记录自动合并成一位患者统计。',
+  kpiActive: '<span class="t">在治</span>今天 ≤ 预计购药日期（未过期）即算在治，预计购药日期当天及之前都属于在治。',
+  kpiWarn:   '<span class="t">断药预警</span>已过预计购药日期，且在 <b>30 天内</b>（含第 30 天）。<br>即：预计购药日期之后 ≤ 30 天。',
+  kpiDrop:   '<span class="t">脱落</span>已过预计购药日期 <b>超过 30 天</b>。<br>即：预计购药日期之后 > 30 天。',
+  colFirst:  '<span class="t">首次 · 累计</span>首次购药 = 该患者最早一笔销售日期；累计 = 全部销量盒数之和。',
+  colLast:   '<span class="t">末次 · 数量</span>末次购药 = 最近一笔销售日期；末次数量 = <b>末次购药所在自然月合计</b>。',
+  colNext:   '<span class="t">理论下次</span>理论下次购药日期 = <b>末次购药日期 + 末次数量 × 30 天</b>。<br>这也是判断存续状态的基准日期。'
+};
+function bindDefTips(){
+  document.addEventListener('mouseover', function(e){
+    var el = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+    var k = el && el.getAttribute('data-tip');
+    if (k && DEF_TIPS[k]) showTip(DEF_TIPS[k], e.clientX, e.clientY);
+  });
+  document.addEventListener('mousemove', function(e){
+    var t = $('#tip'); if (t.hidden) return;
+    var pad = 14, w = t.offsetWidth, h = t.offsetHeight;
+    t.style.left = Math.max(8, Math.min(e.clientX + pad, window.innerWidth - w - 8)) + 'px';
+    t.style.top  = (e.clientY + pad + h > window.innerHeight)
+                   ? Math.max(8, e.clientY - h - pad) : e.clientY + pad;
+  });
+  document.addEventListener('mouseout', function(e){
+    var to = e.relatedTarget;
+    if (to && to.closest && to.closest('[data-tip]')) return;  // 仍在某个带注释的元素内
+    $('#tip').hidden = true;
+  });
+}
 function showTip(html, x, y){
   var t = $('#tip');
   t.innerHTML = html;
@@ -1264,6 +1298,7 @@ $('#btnClearPool').onclick = function(){
 loadManual();
 loadPool();
 bindTips();
+bindDefTips();
 if (ST.pool.length){
   $('#drop').hidden = true;
   $('#app').hidden = false;
