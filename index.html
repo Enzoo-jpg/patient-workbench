@@ -150,8 +150,8 @@
 <div id="app" hidden>
 
   <div class="card bar">
-    <button id="btnImport" class="pri" title="导入新的销售数据文件（xlsx）">导入新数据</button>
-    <select id="impMode" title="导入模式：全量替换=用完整底表重灌（自愈式）；增量追加=按月新数据自动去重合并">
+    <button id="btnImport" class="pri">导入新数据</button>
+    <select id="impMode">
       <option value="replace">全量替换数据池</option>
       <option value="append">增量追加（自动去重）</option>
     </select>
@@ -554,9 +554,12 @@ function stripRow(r){
   Object.keys(r).forEach(function(k){ if (k !== '__row') o[k] = r[k]; });
   return o;
 }
+/* 导入模式默认值：数据池为空＝全量替换；已有数据＝增量追加（仍可手动改） */
+function syncImpMode(){
+  $('#impMode').value = ST.pool.length ? 'append' : 'replace';
+}
 /* 把本次文件行按所选模式并入数据池 */
-function applyImport(){
-  var rows = ST.rows || [];
+function applyImport(){  var rows = ST.rows || [];
   var mode = $('#impMode').value;
   if (!ST.pool.length) mode = 'replace';           // 池为空时无从追加
   var added = 0, dup = 0, conflict = 0;
@@ -594,6 +597,7 @@ function applyImport(){
   recompute();
   fillSelects();
   refreshHeader();
+  syncImpMode();                                     // 导入完成后按池内数据量刷新默认模式
 }
 
 /* 临床诊断选项（用户指定，只此两项） */
@@ -1106,6 +1110,7 @@ function importBackup(file){
         ST.pool = o.pool; savePool(); updatePoolInfo();
         msg += ' 数据池已恢复：' + ST.pool.length + ' 条销售记录。';
       }
+      syncImpMode();
       if (ST.pool.length){
         $('#drop').hidden = true; $('#app').hidden = false;
         recompute(); fillSelects(); refreshHeader();
@@ -1200,7 +1205,7 @@ var TIPS = {
   '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格（.xlsx）。<br>导出字段固定 15 列：患者姓名、年龄、电话、首次购药时间、累计购药数量、最后一次购药时间、最后一次购药数量、理论下次购药日期、临床诊断、末次购药医院、处方医生、支付方式、存续状态、备注、备注日期。<br>勾选了左上角「<b>姓名/电话脱敏</b>」时，导出的姓名和电话会同步脱敏。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
-  '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过']
+  '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过<br>默认值自动定：数据池为空时＝全量替换；已有数据时＝增量追加，仍可手动切换。']
 };
 /* ---------- 看板口径悬浮注释（事件委托，兼容每次渲染重建的元素） ---------- */
 var DEF_TIPS = {
@@ -1299,6 +1304,7 @@ $('#btnClearPool').onclick = function(){
   ST.pool = []; ST.importMsg = ''; savePool(); updatePoolInfo();
   $('#app').hidden = true; $('#drop').hidden = false;
   $('#hsub').textContent = '刷新式 · 离线运行 · 数据不出本机';
+  syncImpMode();                                     // 池已空，默认模式回到全量替换
 };
 
 /* ---------- 启动：有数据池就直接打开，无需文件 ---------- */
@@ -1306,6 +1312,7 @@ loadManual();
 loadPool();
 bindTips();
 bindDefTips();
+syncImpMode();                                       // 启动时按池内数据量定默认导入模式
 if (ST.pool.length){
   $('#drop').hidden = true;
   $('#app').hidden = false;
