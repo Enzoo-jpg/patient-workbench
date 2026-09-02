@@ -57,6 +57,12 @@
   .kpi.g .vl{color:var(--green)} .kpi.a .vl{color:var(--amber)}
   .kpi.r .vl{color:var(--rose)} .kpi.v .vl{color:var(--violet)}
   .kpi.b .vl{color:var(--blue)}
+  /* 可点击下钻的指标卡 */
+  .kpi-click{cursor:pointer;transition:.12s;user-select:none}
+  .kpi-click:hover{border-color:var(--violet);box-shadow:0 2px 8px rgba(155,140,196,.18)}
+  .kpi-active{border-color:var(--violet);box-shadow:0 0 0 2px var(--violet-l)}
+  .kpi-flash{animation:flash 1.3s ease}
+  @keyframes flash{0%,100%{background:var(--card)}25%{background:var(--violet-l)}}
 
   /* 分布条 */
   .dist{display:flex;height:16px;border-radius:5px;overflow:hidden;margin:0 0 10px;background:var(--line)}
@@ -116,6 +122,13 @@
     border-radius:7px;padding:6px 12px;font-size:12.5px;margin-bottom:10px}
   .sw{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);cursor:pointer}
   .sw input{cursor:pointer}
+
+  /* 按钮悬浮注释 */
+  #tip{position:fixed;z-index:99;pointer-events:none;max-width:320px;
+    background:#4A4361;color:#F2EFF8;border-radius:7px;padding:8px 11px;
+    font-size:12px;line-height:1.6;box-shadow:0 6px 20px rgba(60,52,90,.25)}
+  #tip b{color:#fff}
+  #tip .t{display:block;font-weight:600;margin-bottom:2px;color:#fff}
 </style>
 </head>
 <body>
@@ -142,7 +155,6 @@
       <option value="replace">全量替换数据池</option>
       <option value="append">增量追加（自动去重）</option>
     </select>
-    <select id="sheetSel" title="选择底表工作表"></select>
     <label class="sw"><input type="checkbox" id="mask"> 姓名/电话脱敏</label>
     <label class="sw"><input type="checkbox" id="noNeg"> 排除退货(负数量)</label>
     <span class="grow"></span>
@@ -153,6 +165,8 @@
     <button id="btnReset">清空填写</button>
     <input type="file" id="bakFile" accept=".json" hidden>
   </div>
+
+  <div id="tip" hidden></div>
 
   <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A"></div>
 
@@ -355,11 +369,9 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       badDate: [],        // 销售时间无法解析
       badQty: [],         // 数量非数字
       negQty: [],         // 负数量(退货/冲红)
-      ageMissing: [],     // 末次记录年龄缺失
-      dupSeq: {}          // 序号重复(追加数据时带了序号列且重新编号)
+      ageMissing: []      // 末次记录年龄缺失
     };
 
-    var seqSeen = {};
     var recs = [];
     var nDateOk = 0;
 
@@ -369,12 +381,6 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       var qty = num(pick(r, 'I'));
       var name = str(pick(r, 'V'));
       var phone = str(pick(r, 'O'));
-      var seq = str(pick(r, 'A'));
-
-      if (seq) {
-        if (seqSeen[seq]) seqSeen[seq].push(rowNo);
-        else seqSeen[seq] = [rowNo];
-      }
 
       if (ms == null) { issues.badDate.push(rowNo); return; }
       nDateOk++;
@@ -398,10 +404,6 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       if (qty < 0) issues.negQty.push(rowNo);
 
       recs.push(rec);
-    });
-
-    Object.keys(seqSeen).forEach(function (k) {
-      if (seqSeen[k].length > 1) issues.dupSeq[k] = seqSeen[k];
     });
 
     // --- 分组 ---
@@ -788,18 +790,30 @@ function render(){
     nd.hidden = true;
   }
 
-  /* KPI */
+  /* KPI（卡片可点击下钻到明细表） */
   var c = { '在治':0, '断药预警':0, '脱落':0 };
   R.patients.forEach(function(p){ c[p.status] = (c[p.status]||0)+1; });
   var n = R.patients.length || 1;
   var todoDiag = R.patients.filter(function(p){ return !manualOf(p.key).diag; }).length;
+
+  var fS = $('#fStatus').value, fF = $('#fFill').value, fN = $('#fNote').value;
+  var hasFilter = !!(fS || fF || fN || $('#fStore').value || $('#fHosp').value ||
+                     $('#fWin').value || ($('#q').value || '').trim());
+
   $('#kpis').innerHTML =
-    kpi('v','患者总数', R.patients.length, R.meta.nRows + ' 条销售记录') +
-    kpi('g','在治', c['在治'], pct(c['在治'],n)) +
-    kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],n)) +
-    kpi('r','脱落', c['脱落'], pct(c['脱落'],n)) +
-    kpi('b','临床诊断待填', todoDiag, pct(todoDiag,n)) +
-    kpi('','建档异常', I.missingKey.length, I.missingKey.length?'需提醒药房补全':'无缺失');
+    kpi('v','患者总数', R.patients.length, hasFilter ? '点击清空全部筛选' : R.meta.nRows + ' 条销售记录',
+        'all', hasFilter) +
+    kpi('g','在治', c['在治'], pct(c['在治'],n) + ' · 点击筛选', '在治', fS === '在治') +
+    kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],n) + ' · 点击筛选', '断药预警', fS === '断药预警') +
+    kpi('r','脱落', c['脱落'], pct(c['脱落'],n) + ' · 点击筛选', '脱落', fS === '脱落') +
+    kpi('b','临床诊断待填', todoDiag, pct(todoDiag,n) + ' · 点击筛选', 'todoDiag', fF === 'todo') +
+    kpi('','建档异常', I.missingKey.length,
+        I.missingKey.length ? '点击查看缺失名单' : '无缺失 · 点击查看', 'missing', false);
+
+  /* 绑定下钻点击 */
+  Array.prototype.forEach.call(document.querySelectorAll('#kpis .kpi[data-drill]'), function(el){
+    el.onclick = function(){ drill(el.getAttribute('data-drill')); };
+  });
 
   /* 分布条 */
   $('#dist').innerHTML =
@@ -808,8 +822,38 @@ function render(){
   renderQuality();
   renderTable();
 }
-function kpi(cls, lb, vl, ex){
-  return '<div class="kpi '+cls+'"><div class="lb">'+lb+'</div><div class="vl">'+vl+'</div><div class="ex">'+ex+'</div></div>';
+function kpi(cls, lb, vl, ex, drill, active){
+  var cl = cls + (drill ? ' kpi-click' : '') + (active ? ' kpi-active' : '');
+  return '<div class="kpi '+cl+'"'+(drill ? ' data-drill="' + drill + '"' : '') +
+         ' title="' + (drill === 'missing' ? '展开数据质量并跳到缺失名单' : (drill ? '点击筛选明细表' : '')) + '">' +
+         '<div class="lb">'+lb+'</div><div class="vl">'+vl+'</div><div class="ex">'+ex+'</div></div>';
+}
+/* 指标卡下钻：点卡片 → 明细表按该条件筛选；再点一次取消 */
+function drill(what){
+  if (what === 'all'){
+    $('#fStatus').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
+    $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWin').value = '';
+    $('#q').value = '';
+    render(); renderTable();
+    return;
+  }
+  if (what === 'missing'){
+    var d = $('#quality');
+    d.open = true;
+    d.scrollIntoView({block:'center', behavior:'smooth'});
+    d.classList.remove('kpi-flash');
+    void d.offsetWidth;
+    d.classList.add('kpi-flash');
+    return;
+  }
+  if (what === 'todoDiag'){
+    $('#fFill').value = ($('#fFill').value === 'todo') ? '' : 'todo';
+  } else {
+    $('#fStatus').value = ($('#fStatus').value === what) ? '' : what;
+  }
+  render(); renderTable();
+  var box = $('.tbox');
+  if (box) box.scrollIntoView({block:'nearest'});
 }
 function pct(a,b){ return (a/b*100).toFixed(1) + '%'; }
 function seg(cls, lb, v, n){
@@ -845,13 +889,6 @@ function renderQuality(){
       '<b>'+I.ageMissing.length+'</b> 位患者的末次购药记录缺少年龄（行号 '+I.ageMissing.join('、')+'），年龄列将显示为空白。');
   else add('年龄完整', 'ok', '所有患者末次购药记录均有年龄。');
 
-  var dup = Object.keys(I.dupSeq).length;
-  if (dup)
-    add('序号重复', 'warn',
-      '<b>'+dup+'</b> 个序号重复出现（如序号 '+Object.keys(I.dupSeq).slice(0,3).join('、')+'），'+
-      '通常是因为追加数据时连同序号列一起粘贴、且序号从 1 重新编号。不影响患者统计，但如需按序号查找请注意。');
-  else add('序号连续', 'ok', '序号列无重复。');
-
   if (I.pipeInKey.length)
     add('字段含分隔符', 'err',
       '<b>'+I.pipeInKey.length+'</b> 条记录的开票抬头或电话含「|」，在 Excel 版会截断患者键。本工作台已不受影响。');
@@ -863,7 +900,7 @@ function renderQuality(){
 
   $('#qbody').innerHTML = rows.join('');
   var errs = miss.length + I.badDate.length + I.badQty.length + I.pipeInKey.length;
-  var warn = I.negQty.length + I.ageMissing.length + dup;
+  var warn = I.negQty.length + I.ageMissing.length;
   $('#qbadge').innerHTML =
     (errs ? '<span class="tag err">'+errs+' 项需处理</span>' : '') +
     (warn ? '<span class="tag warn">'+warn+' 项注意</span>' : '') +
@@ -1071,38 +1108,43 @@ function refreshHeader(){
   $('#hsub').textContent = '患者池：' + ST.pool.length + ' 条销售记录 · ' + n + ' 位患者　|　' +
     ST.sheetName + '　|　离线运行，数据不出本机';
 }
+/* 自动挑底表：按候选顺序逐张试，取第一张"必需列齐全"的工作表。
+   比让人手工选更稳——表被改名、顺序变了都不会选错。 */
 function loadSheetNames(meta){
   var names = meta.SheetNames;
   ST.sheetNames = names;
-  var pick = names.filter(function(x){ return /底表|明细|销售/i.test(x); })[0]
-          || names.filter(function(x){ return !/患者|工作台|汇总/i.test(x); })[0]
-          || names[0];
-  $('#sheetSel').innerHTML = names.map(function(n){
-    return '<option'+(n===pick?' selected':'')+'>'+esc(n)+'</option>';
-  }).join('');
-  load(pick);
+  var prefer = names.filter(function(x){ return /底表|明细|销售/i.test(x); });
+  var rest   = names.filter(function(x){ return prefer.indexOf(x) < 0; });
+  rest.sort(function(a,b){                       // 明显的汇总表排到最后
+    var w = function(x){ return /患者|工作台|汇总|看板/i.test(x) ? 1 : 0; };
+    return w(a) - w(b);
+  });
+  var order = prefer.concat(rest);
+  for (var i = 0; i < order.length; i++){
+    var wb = readSheet(ST.buf, order[i]);
+    var parsed = sheetToRows(wb.Sheets[order[i]]);
+    if (missingHeaders(parsed.header).length === 0){
+      applyLoaded(order[i], parsed);
+      return;
+    }
+  }
+  /* 没有一张符合底表格式：载入第一张并报错 */
+  var wb0 = readSheet(ST.buf, order[0]);
+  applyLoaded(order[0], sheetToRows(wb0.Sheets[order[0]]));
+  ST.importMsg = '这个文件里没有找到符合底表格式的工作表（缺少销售时间/销售数量/会员电话/开票抬头列），' +
+    '请确认打开的是销售底表文件。';
+  recompute();
 }
-/* 解析选中工作表 → 按模式并入数据池 → 重算 */
-function load(name){
-  var buf = ST.buf;
+/* 解析结果落库 → 按模式并入数据池 → 重算 */
+function applyLoaded(name, parsed){
   ST.sheetName = name;
-  var wb = readSheet(buf, name);
-  var parsed = sheetToRows(wb.Sheets[name]);
   ST.rows = parsed.rows;
   ST.header = parsed.header;
-
-  var missCols = missingHeaders(ST.header);
-  if (missCols.length){
-    /* 选中的表不是底表：不并入池，只提示 */
-    $('#drop').hidden = true;
-    $('#app').hidden = false;
-    recompute();
-    refreshHeader();
-    return;
-  }
   /* 切换文件时重置筛选，避免沿用旧选项 */
   $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = '';
   $('#fHosp').value = ''; $('#fWin').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
+  $('#drop').hidden = true;
+  $('#app').hidden = false;
   applyImport();
 }
 function fillSelects(){
@@ -1136,6 +1178,44 @@ function handleFile(file){
   fr.readAsArrayBuffer(file);
 }
 
+/* ---------- 按钮悬浮注释 ---------- */
+var TIPS = {
+  '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置。'],
+  '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
+  '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
+  '#btnCsv': ['导出 CSV', '把<b>当前筛选出来</b>的患者导出成 Excel 能直接打开的表格。<br>导出的字段比屏幕上看到的更全（含年龄、首次购药、累计数量、末次数量、逾期天数、备注日期等 17 项）。'],
+  '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
+  '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
+  '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过']
+};
+function showTip(html, x, y){
+  var t = $('#tip');
+  t.innerHTML = html;
+  t.hidden = false;
+  var pad = 14, w = t.offsetWidth, h = t.offsetHeight;
+  var left = Math.min(x + pad, window.innerWidth - w - 8);
+  var top  = (y + pad + h > window.innerHeight) ? Math.max(8, y - h - pad) : y + pad;
+  t.style.left = Math.max(8, left) + 'px';
+  t.style.top  = top + 'px';
+}
+function bindTips(){
+  Object.keys(TIPS).forEach(function(sel){
+    var el = $(sel); if (!el) return;
+    el.addEventListener('mouseenter', function(){
+      showTip('<span class="t">' + TIPS[sel][0] + '</span>' + TIPS[sel][1], 0, 0);
+    });
+    el.addEventListener('mousemove', function(e){
+      var t = $('#tip');
+      if (t.hidden) return;
+      var pad = 14, w = t.offsetWidth, h = t.offsetHeight;
+      t.style.left = Math.max(8, Math.min(e.clientX + pad, window.innerWidth - w - 8)) + 'px';
+      t.style.top  = (e.clientY + pad + h > window.innerHeight)
+                     ? Math.max(8, e.clientY - h - pad) : e.clientY + pad;
+    });
+    el.addEventListener('mouseleave', function(){ $('#tip').hidden = true; });
+  });
+}
+
 /* ---------- 事件 ---------- */
 $('#drop').onclick = function(){ $('#file').click(); };
 $('#file').onchange = function(){ if (this.files[0]) handleFile(this.files[0]); };
@@ -1159,11 +1239,6 @@ window.addEventListener('drop', function(e){
 /* 工具栏"导入新数据"按钮 */
 $('#btnImport').onclick = function(){ $('#file').click(); };
 
-$('#sheetSel').onchange = function(){
-  var name = this.value;
-  $('#hsub').textContent = '正在读取工作表 ' + name + ' …';
-  setTimeout(function(){ try{ load(name); }catch(e){ alert('读取失败：'+e.message); } }, 30);
-};
 $('#mask').onchange = renderTable;
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
@@ -1186,6 +1261,7 @@ $('#btnClearPool').onclick = function(){
 /* ---------- 启动：有数据池就直接打开，无需文件 ---------- */
 loadManual();
 loadPool();
+bindTips();
 if (ST.pool.length){
   $('#drop').hidden = true;
   $('#app').hidden = false;
