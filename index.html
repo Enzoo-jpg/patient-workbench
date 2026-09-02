@@ -377,8 +377,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     var warnDays = opts.warnDays == null ? 7 : opts.warnDays;
     var t0 = todayStartMs(opts.today == null ? Date.now() : opts.today);
 
+    /* 取数优先级（2026-09-02 改为表头匹配）：
+       1) 行对象上的语义字段名（如 r.saleTime）——由表头文字匹配写入，位置随意都能拿到；
+       2) 退回原固定列字母（r.B / r.I ...）——兼容早期按位置导入、已存进数据池的历史数据。 */
     var pick = function (r, k) {
-      return r[k] !== undefined ? r[k] : r[FIELD[k]];
+      var f = FIELD[k];
+      if (f && r[f] !== undefined) return r[f];
+      return r[k];
     };
 
     var issues = {
@@ -563,15 +568,33 @@ function updatePoolInfo(){
     (rg[0] ? '　·　销售时间 ' + E.fmtDate(rg[0]) + ' ~ ' + E.fmtDate(rg[1]) : '') +
     '　·　保存在本机浏览器，换电脑请用「导出备份(含数据池)」';
 }
-/* 去重键：同一患者 + 同一订单 + 同一商品 + 同一时刻 + 同一数量 = 同一条记录 */
-function poolKey(r){
-  return [r.V||'', r.O||'', r.D||'', r.E||'', r.F||'',
-          E.parseDateLike(r.B) == null ? '' : E.parseDateLike(r.B),
-          r.I === undefined ? '' : r.I].join('|');
+/* 去重键：同一患者 + 同一订单 + 同一商品 + 同一时刻 + 同一数量 = 同一条记录
+   取值同样"语义字段优先、列字母兜底"，这样不同列顺序的底表互相追加也能正确去重 */
+function poolField(r, field, letter){
+  if (r[field] !== undefined && r[field] !== null && r[field] !== '') return r[field];
+  return (letter && r[letter] !== undefined && r[letter] !== null) ? r[letter] : '';
 }
+function poolKey(r){
+  var t = E.parseDateLike(poolField(r, 'saleTime', 'B'));
+  return [poolField(r,'invoiceName','V'), poolField(r,'phone','O'), poolField(r,'receiptNo','D'),
+          poolField(r,'orderNo','E'), poolField(r,'prodCode','F'),
+          t == null ? '' : t,
+          poolField(r,'qty','I')].join('|');
+}
+/* 语义字段 -> 原固定列字母（旧数据兜底用） */
+var _fieldLetter = null;
+function fieldLetter(){
+  if (_fieldLetter) return _fieldLetter;
+  _fieldLetter = {};
+  var F = E.FIELD;
+  Object.keys(F).forEach(function(L){ _fieldLetter[F[L]] = L; });
+  return _fieldLetter;
+}
+/* 内容投影：只比语义值，不比"第几列"——
+   这样同一条记录从不同列顺序的底表进来也判为相同，不会误报"已更新" */
 function stripRow(r){
-  var o = {};
-  Object.keys(r).forEach(function(k){ if (k !== '__row') o[k] = r[k]; });
+  var FL = fieldLetter(), o = {};
+  Object.keys(FL).forEach(function(f){ o[f] = poolField(r, f, FL[f]); });
   return o;
 }
 /* 导入模式默认值：数据池为空＝全量替换；已有数据＝增量追加（仍可手动改） */
@@ -610,6 +633,8 @@ function applyImport(){  var rows = ST.rows || [];
       ' 条' + (conflict ? '，按新数据更新 ' + conflict + ' 条已有记录' : '') +
       '，数据池现有 ' + ST.pool.length + ' 条。';
   }
+  var nF = ST.fmap ? Object.keys(ST.fmap).length : 0;
+  if (nF) ST.importMsg += ' 按表头识别到 ' + nF + ' 个字段（列位置不影响）。';
   savePool();
   updatePoolInfo();
   $('#app').hidden = false;
@@ -687,6 +712,8 @@ function readSheet(buf, name){
 function sheetToRows(ws){
   var aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, blankrows:true});
   var header = (aoa[0] || []).map(function(v){ return v == null ? '' : String(v); });
+  var fmap = mapHeader(header).map;               // 语义字段 -> 列序号（位置无关）
+  var fields = Object.keys(fmap);
   var rows = [];
   for (var i=1;i<aoa.length;i++){
     var a = aoa[i]; if(!a) continue;
@@ -695,33 +722,89 @@ function sheetToRows(ws){
       var v = a[j];
       if (v !== null && v !== undefined && v !== ''){ o[colLetter(j)] = v; any = true; }
     }
+    /* 再按表头写一份语义字段：引擎优先读它，列位置怎么变都不影响 */
+    for (var k=0;k<fields.length;k++){
+      var sv = a[fmap[fields[k]]];
+      if (sv !== null && sv !== undefined && sv !== '') o[fields[k]] = sv;
+    }
     if (any) rows.push(o);
   }
-  return { rows: rows, header: header };
+  return { rows: rows, header: header, fmap: fmap };
 }
-/* 底表必需列：按表头判断，比按数据猜可靠得多
-   （汇总表的 B 列是"年龄"，纯数字会被误当成日期序列号） */
-var REQUIRED_HEADERS = { B:'销售时间', I:'销售数量', O:'会员电话', V:'开票抬头' };
-function missingHeaders(header){
-  var miss = [];
-  Object.keys(REQUIRED_HEADERS).forEach(function(col){
-    var want = REQUIRED_HEADERS[col];
-    var got = header[colLetterToIndex(col)] || '';
-    if (got.indexOf(want) < 0) miss.push(want + '(应为' + col + '列)');
+/* ---------- 表头匹配：只看列名叫什么，不管它在第几列 ----------
+   底表加列、删列、换顺序都不会影响，只要表头里有这些字段就能抓到。
+   别名按优先级排列；先做一轮"完全相等"匹配，再做一轮"包含"匹配，
+   避免「会员姓名」被误当成「姓名」这类错配。 */
+var HEADER_ALIASES = {
+  seq:         ['序号'],
+  saleTime:    ['销售时间','销售日期','购买时间','开单日期'],
+  orderStatus: ['订单状态'],
+  receiptNo:   ['小票号','单据号'],
+  orderNo:     ['订单号'],
+  prodCode:    ['商品代码','商品编码','产品编码'],
+  prodName:    ['商品名称','商品名','药品名称','产品名称'],
+  spec:        ['规格'],
+  qty:         ['销售数量','数量'],
+  amtExTax:    ['无税金额','不含税金额'],
+  amtIncTax:   ['含税金额'],
+  pay:         ['收款方式','支付方式'],
+  memberNo:    ['会员号','会员编码'],
+  memberName:  ['会员姓名'],
+  phone:       ['会员电话','联系电话','手机号','电话'],
+  firstHosp:   ['首诊医院'],
+  diag:        ['临床诊断','诊断'],
+  indication:  ['适应症'],
+  hosp:        ['医疗单位','购药医院','医院'],
+  doctor:      ['处方医生','医生'],
+  dept:        ['处方科室','科室'],
+  invoiceName: ['开票抬头','发票抬头','抬头','患者姓名','购药人'],
+  age:         ['年龄'],
+  gender:      ['性别'],
+  store:       ['药房名称','药房','门店名称','门店']
+};
+/* 缺这 4 个就没法算，其余字段缺了只是少点信息，不拦着 */
+var REQUIRED_FIELDS = ['saleTime','qty','phone','invoiceName'];
+var FIELD_LABEL = { saleTime:'销售时间', qty:'销售数量', phone:'会员电话', invoiceName:'开票抬头' };
+function normHead(s){ return String(s == null ? '' : s).replace(/[\s　()（）]/g, ''); }
+
+/* 表头 -> { map:{字段:列序}, matched:命中字段数, missing:[缺的必需字段名] } */
+function mapHeader(header){
+  var H = header.map(normHead);
+  var map = {}, usedCol = {};
+  Object.keys(HEADER_ALIASES).forEach(function(f){
+    if (map[f] !== undefined) return;
+    var al = HEADER_ALIASES[f];
+    for (var i = 0; i < H.length; i++){
+      if (usedCol[i] || !H[i]) continue;
+      for (var a = 0; a < al.length; a++){
+        if (H[i] === al[a]){ map[f] = i; usedCol[i] = 1; return; }
+      }
+    }
   });
-  return miss;
+  Object.keys(HEADER_ALIASES).forEach(function(f){
+    if (map[f] !== undefined) return;
+    var al = HEADER_ALIASES[f];
+    for (var a = 0; a < al.length; a++){
+      for (var i = 0; i < H.length; i++){
+        if (usedCol[i] || !H[i]) continue;
+        if (H[i].indexOf(al[a]) >= 0){ map[f] = i; usedCol[i] = 1; return; }
+      }
+    }
+  });
+  var missing = REQUIRED_FIELDS.filter(function(f){ return map[f] === undefined; })
+                               .map(function(f){ return FIELD_LABEL[f]; });
+  return { map: map, matched: Object.keys(map).length, missing: missing };
 }
-function colLetterToIndex(s){
-  var n = 0;
-  for (var i=0;i<s.length;i++) n = n*26 + (s.charCodeAt(i)-64);
-  return n-1;
-}
+function missingHeaders(header){ return mapHeader(header).missing; }
 
 /* ---------- 计算 ---------- */
 function recompute(){
   var src = ST.pool;
   if ($('#noNeg').checked){
-    src = src.filter(function(r){ return !(typeof r.I === 'number' && r.I < 0); });
+    src = src.filter(function(r){
+      var q = r.qty !== undefined ? r.qty : r.I;   // 优先表头匹配的销售数量，兼容旧数据
+      return !(typeof q === 'number' && q < 0);
+    });
   }
   ST.result = E.compute(src, {});
   render();
@@ -801,8 +884,8 @@ function render(){
   if (missCols.length){
     nd.hidden = false;
     nd.innerHTML = '这张工作表缺少底表必需的列：<b>' + missCols.join('、') + '</b>，' +
-      '看起来不是销售底表，以下统计不可信。请在左上角切换到正确的底表' +
-      '（当前可选：' + ST.sheetNames.map(esc).join('、') + '）。';
+      '看起来不是销售底表，以下统计不可信。请点上方「导入新数据」重新选择销售底表文件' +
+      '（系统会自动挑出表头含销售时间、销售数量、会员电话、开票抬头的工作表，列在第几列都没关系）。';
   } else if (R.meta.nPatients === 0){
     nd.hidden = false;
     nd.innerHTML = '没有从这张表识别到任何患者，请确认选择的是销售底表。';
@@ -1186,6 +1269,7 @@ function applyLoaded(name, parsed){
   ST.sheetName = name;
   ST.rows = parsed.rows;
   ST.header = parsed.header;
+  ST.fmap = parsed.fmap || {};
   /* 切换文件时重置筛选，避免沿用旧选项 */
   $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = '';
   $('#fHosp').value = ''; $('#fWin').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
