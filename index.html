@@ -113,6 +113,8 @@
   .edit{background:#FFFDF6;border:1px solid #EFE6CF;border-radius:6px;padding:2px 6px;
     font:inherit;color:var(--ink);width:100%;min-width:70px;cursor:pointer}
   .edit:focus{outline:none;border-color:var(--violet);background:#fff}
+  input.edit[data-f="note"]:focus{position:relative;width:360px;z-index:3;
+    box-shadow:0 2px 12px rgba(90,70,160,.2)}
   .edit.done{background:#F4F9F5;border-color:#DCEDE1}
   .ref{display:block;color:var(--ink3);font-size:10px;white-space:nowrap}
   .mono{font-variant-numeric:tabular-nums;letter-spacing:.2px}
@@ -393,6 +395,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         doctor: str(pick(r, 'T')),
         pay: str(pick(r, 'L')),
         diag: str(pick(r, 'Q')),
+        indication: str(pick(r, 'R')),
         store: str(pick(r, 'Y')),
         prodName: str(pick(r, 'G')),
         memberName: str(pick(r, 'N')),
@@ -464,6 +467,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         doctor: tail.doctor,
         pay: tail.pay,          // 收款方式: 直接匹配过来(用户确认)
         diagSrc: tail.diag,     // 临床诊断: 仅作人工确认的参考，不自动填入
+        indSrc: tail.indication, // 末次适应症: 作为临床诊断的小字参考(用户 2026-09-02)
         store: tail.store,
         nRows: items.length,
         status: status,
@@ -981,6 +985,10 @@ function renderTable(){
       if (f === 'note'){
         var ref = inp.parentElement.querySelector('.ref');
         if (ref) ref.textContent = m.noteDate || '';
+        /* 同步刷新悬停全文属性，无需等重渲染 */
+        if (inp.value) inp.setAttribute('data-tipfull',
+          '<span class=\'t\'>备注全文（' + (m.noteDate || '无日期') + '）</span>' + inp.value);
+        else inp.removeAttribute('data-tipfull');
       }
       if (f === 'diag') { render(); }   // 诊断影响"待填"计数
     };
@@ -1012,11 +1020,12 @@ function tdNext(p){
   return '<td>' + esc(E.fmtDate(p.nextMs)) +
     (sub ? '<span class="ref" style="color:#B96B6B">' + esc(sub) + '</span>' : '') + '</td>';
 }
-/* 备注列：输入框 + 自动记录的日期 */
+/* 备注列：输入框 + 自动记录的日期；内容长时悬停看全文、聚焦时输入框展宽 */
 function tdNote(p, m){
   return '<td><input class="edit' + (m.note ? ' done' : '') +
-    '" data-k="' + esc(p.key) + '" data-f="note" value="' + esc(m.note) + '" placeholder="填写备注">' +
-    '<span class="ref">' + esc(m.noteDate || '') + '</span></td>';
+    '" data-k="' + esc(p.key) + '" data-f="note" value="' + esc(m.note) + '" placeholder="填写备注"' +
+    (m.note ? ' data-tipfull="<span class=\'t\'>备注全文（' + esc(m.noteDate || '无日期') + '）</span>' + esc(m.note) + '"' : '') +
+    '><span class="ref">' + esc(m.noteDate || '') + '</span></td>';
 }
 
 function td(v){ return '<td>'+esc(v)+'</td>'; }
@@ -1031,7 +1040,9 @@ function tdDiag(p, m){
     opts.push('<option'+(m.diag === d ? ' selected' : '')+'>'+d+'</option>');
   });
   if (m.diag && DIAG_OPTS.indexOf(m.diag) < 0) opts.push('<option selected>'+esc(m.diag)+'</option>');
-  var ref = p.diagSrc ? '<span class="ref">底表参考：'+esc(p.diagSrc)+'</span>' : '';
+  /* 小字参考：优先末次适应症(用户指定)，底表没有适应症时退回临床诊断列 */
+  var ref = p.indSrc ? '<span class="ref">适应症参考：'+esc(p.indSrc)+'</span>'
+          : (p.diagSrc ? '<span class="ref">底表参考：'+esc(p.diagSrc)+'</span>' : '');
   return '<td><select class="edit'+(m.diag?' done':'')+'" data-k="'+esc(p.key)+'" data-f="diag">'+
          opts.join('')+'</select>'+ref+'</td>';
 }
@@ -1219,8 +1230,12 @@ var DEF_TIPS = {
 };
 function bindDefTips(){
   document.addEventListener('mouseover', function(e){
-    var el = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
-    var k = el && el.getAttribute('data-tip');
+    var el = e.target && e.target.closest ? e.target.closest('[data-tip],[data-tipfull]') : null;
+    if (!el) return;
+    if (document.activeElement === el) return;          // 正在编辑的输入框不弹提示
+    var full = el.getAttribute('data-tipfull');         // 动态内容(如备注全文)直接挂在元素上
+    if (full){ showTip(full, e.clientX, e.clientY); return; }
+    var k = el.getAttribute('data-tip');
     if (k && DEF_TIPS[k]) showTip(DEF_TIPS[k], e.clientX, e.clientY);
   });
   document.addEventListener('mousemove', function(e){
@@ -1230,9 +1245,13 @@ function bindDefTips(){
     t.style.top  = (e.clientY + pad + h > window.innerHeight)
                    ? Math.max(8, e.clientY - h - pad) : e.clientY + pad;
   });
+  document.addEventListener('focusin', function(e){
+    var tag = e.target && e.target.tagName;             // 点进任何输入框/下拉时收起提示
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') $('#tip').hidden = true;
+  });
   document.addEventListener('mouseout', function(e){
     var to = e.relatedTarget;
-    if (to && to.closest && to.closest('[data-tip]')) return;  // 仍在某个带注释的元素内
+    if (to && to.closest && to.closest('[data-tip],[data-tipfull]')) return;  // 仍在某个带注释的元素内
     $('#tip').hidden = true;
   });
 }
