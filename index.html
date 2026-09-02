@@ -441,10 +441,13 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       if (ageBest == null) issues.ageMissing.push(tail.row);
 
       var nextMs = last + daysPerBox * lastQty * DAY_MS;
-      var status;
-      if (nextMs < t0) status = '脱落';
-      else if (nextMs <= t0 + warnDays * DAY_MS) status = '断药预警';
-      else status = '在治';
+      // 存续状态口径（用户指定 2026-09-02）：
+      //   预计购药日期(nextMs)当天及之前 → 在治；
+      //   已过期 ≤ 30 天 → 断药预警；已过期 > 30 天 → 脱落。
+      var gap = t0 - nextMs;                 // 距预计购药日期（正=已过期）
+      var status = gap <= 0 ? '在治'
+                 : gap <= 30 * DAY_MS ? '断药预警'
+                 : '脱落';
 
       patients.push({
         key: key,
@@ -976,7 +979,7 @@ function renderTable(){
 
   var tot = ST.result.patients.length;
   $('#cnt').textContent = list.length + ' / ' + tot + ' 人';
-  $('#foot').textContent = '口径：患者键 = 开票抬头 + 电话；末次数量 = 末次购药所在自然月合计；理论下次购药 = 末次购药 + 末次数量 × 30 天；备注日期随备注自动记录';
+  $('#foot').textContent = '口径：患者键 = 开票抬头 + 电话；末次数量 = 末次购药所在自然月合计；理论下次购药 = 末次购药 + 末次数量 × 30 天；存续状态：预计购药日期当天及之前＝在治，过期 ≤30 天＝断药预警，过期 >30 天＝脱落；备注日期随备注自动记录';
 }
 
 /* 今日日期（本地） */
