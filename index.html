@@ -113,8 +113,23 @@
   .edit{background:#FFFDF6;border:1px solid #EFE6CF;border-radius:6px;padding:2px 6px;
     font:inherit;color:var(--ink);width:100%;min-width:70px;cursor:pointer}
   .edit:focus{outline:none;border-color:var(--violet);background:#fff}
+  input.edit[data-f="note"]{min-width:150px}
   input.edit[data-f="note"]:focus{position:relative;width:360px;z-index:3;
     box-shadow:0 2px 12px rgba(90,70,160,.2)}
+  /* 备注大编辑窗：长备注完整可见可编辑 */
+  #noteEd{position:fixed;z-index:98;width:480px;max-width:calc(100vw - 24px);
+    background:#FFFDF6;border:1px solid var(--violet);border-radius:10px;
+    box-shadow:0 10px 30px rgba(60,52,90,.3);padding:10px}
+  #noteEd .ne-head{display:flex;justify-content:space-between;align-items:center;
+    font-size:12px;color:var(--ink2);margin-bottom:6px}
+  #noteEd .ne-head b{color:var(--ink)}
+  #neClose{cursor:pointer;color:var(--ink3);font-size:18px;padding:0 4px;line-height:1}
+  #neClose:hover{color:var(--violet)}
+  #neTa{width:100%;height:160px;resize:vertical;border:1px solid #EFE6CF;border-radius:7px;
+    padding:7px 9px;font:inherit;font-size:12.5px;line-height:1.7;color:var(--ink);
+    background:#fff;box-sizing:border-box;white-space:pre-wrap}
+  #neTa:focus{outline:none;border-color:var(--violet)}
+  .ne-foot{font-size:11px;color:var(--ink3);margin-top:5px}
   .edit.done{background:#F4F9F5;border-color:#DCEDE1}
   .ref{display:block;color:var(--ink3);font-size:10px;white-space:nowrap}
   .mono{font-variant-numeric:tabular-nums;letter-spacing:.2px}
@@ -1234,7 +1249,12 @@ function bindDefTips(){
     if (!el) return;
     if (document.activeElement === el) return;          // 正在编辑的输入框不弹提示
     var full = el.getAttribute('data-tipfull');         // 动态内容(如备注全文)直接挂在元素上
-    if (full){ showTip(full, e.clientX, e.clientY); return; }
+    if (full){
+      $('#tip').style.maxWidth = '440px';               // 长文本放宽浮层
+      showTip(full, e.clientX, e.clientY);
+      return;
+    }
+    $('#tip').style.maxWidth = '';
     var k = el.getAttribute('data-tip');
     if (k && DEF_TIPS[k]) showTip(DEF_TIPS[k], e.clientX, e.clientY);
   });
@@ -1248,12 +1268,66 @@ function bindDefTips(){
   document.addEventListener('focusin', function(e){
     var tag = e.target && e.target.tagName;             // 点进任何输入框/下拉时收起提示
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') $('#tip').hidden = true;
+    /* 点击备注框 → 打开大编辑窗（长备注完整可见可编辑） */
+    if (e.target && e.target.matches && e.target.matches('input[data-f="note"]')) openNoteEditor(e.target);
+  });
+  document.addEventListener('mousedown', function(e){
+    if (!document.getElementById('noteEd')) return;
+    var t = e.target;
+    if (t.closest && t.closest('#noteEd')) return;
+    if (t.matches && t.matches('input[data-f="note"]')) return;   // 点另一个备注框交给 focusin 换窗
+    closeNoteEditor();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') closeNoteEditor();
   });
   document.addEventListener('mouseout', function(e){
     var to = e.relatedTarget;
     if (to && to.closest && to.closest('[data-tip],[data-tipfull]')) return;  // 仍在某个带注释的元素内
     $('#tip').hidden = true;
   });
+}
+
+/* ---------- 备注大编辑窗：点击备注框弹出，完整可见、自动保存 ---------- */
+function openNoteEditor(inp){
+  closeNoteEditor();
+  var m = manualOf(inp.getAttribute('data-k'));
+  var panel = document.createElement('div');
+  panel.id = 'noteEd';
+  panel.innerHTML = '<div class="ne-head"><b>备注编辑</b><span>自动保存 · Ctrl+Enter 关闭　' +
+                    '<span id="neClose" title="关闭">×</span></span></div>' +
+                    '<textarea id="neTa" placeholder="填写备注…（可换行）"></textarea>' +
+                    '<div class="ne-foot">备注日期自动记录为今天：' + todayStr() + '</div>';
+  document.body.appendChild(panel);
+  var ta = panel.querySelector('#neTa');
+  ta.value = m.note || '';
+  var r = inp.getBoundingClientRect();
+  var w = 480, h = panel.offsetHeight || 240;
+  panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 12)) + 'px';
+  panel.style.top  = (r.bottom + 8 + h > window.innerHeight)
+                     ? Math.max(8, r.top - h - 8) + 'px' : (r.bottom + 8) + 'px';
+  ta.focus();
+  var sync = function(){
+    m.note = ta.value;
+    m.noteDate = ta.value ? todayStr() : '';
+    saveManual();
+    inp.value = m.note;
+    inp.className = 'edit' + (m.note ? ' done' : '');
+    if (m.note) inp.setAttribute('data-tipfull',
+      '<span class=\'t\'>备注全文（' + (m.noteDate || '无日期') + '）</span>' + m.note);
+    else inp.removeAttribute('data-tipfull');
+    var ref = inp.parentElement.querySelector('.ref');
+    if (ref) ref.textContent = m.noteDate || '';
+  };
+  ta.oninput = sync;
+  panel.querySelector('#neClose').onclick = function(){ sync(); closeNoteEditor(); };
+  ta.onkeydown = function(e){
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ sync(); closeNoteEditor(); }
+  };
+}
+function closeNoteEditor(){
+  var p = document.getElementById('noteEd');
+  if (p) p.remove();
 }
 function showTip(html, x, y){
   var t = $('#tip');
