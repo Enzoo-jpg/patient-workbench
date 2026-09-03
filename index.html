@@ -191,6 +191,15 @@
 
   <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A"></div>
 
+  <div id="dStoreBar" hidden style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;
+       background:#FFF;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sd);font-size:13px;color:var(--ink2)">
+    <span><b>查看药房</b></span>
+    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #EFE6CF;border-radius:6px;background:#FFFDF6;color:var(--ink);min-width:200px;max-width:380px"></select>
+    <span id="dStoreCount" style="color:var(--ink3);font-size:11px"></span>
+    <span style="flex:1"></span>
+    <button id="dStoreClear" hidden style="border:none;background:transparent;color:var(--violet);cursor:pointer;font-size:12px;padding:2px 6px">清除筛选</button>
+  </div>
+
   <div class="nudge" id="nudge" hidden></div>
 
   <div class="kpis" id="kpis"></div>
@@ -904,23 +913,29 @@ function render(){
     nd.hidden = true;
   }
 
-  /* KPI（卡片可点击下钻到明细表） */
+  /* 看板药房切换：影响 KPI 与分布条；明细表走 fStore（已同步） */
+  var dStore = $('#dStore').value;
+  var viewAll = R.patients;
+  var viewPats = dStore ? R.patients.filter(function(p){ return p.store === dStore; }) : R.patients;
+  var viewN = viewPats.length || 1;
   var c = { '在治':0, '断药预警':0, '脱落':0 };
-  R.patients.forEach(function(p){ c[p.status] = (c[p.status]||0)+1; });
-  var n = R.patients.length || 1;
-  var todoDiag = R.patients.filter(function(p){ return !manualOf(p.key).diag; }).length;
+  viewPats.forEach(function(p){ c[p.status] = (c[p.status]||0)+1; });
+  var todoDiag = viewPats.filter(function(p){ return !manualOf(p.key).diag; }).length;
+  var nAll = viewAll.length;
 
   var fS = $('#fStatus').value, fF = $('#fFill').value, fN = $('#fNote').value;
   var hasFilter = !!(fS || fF || fN || $('#fStore').value || $('#fHosp').value ||
                      $('#fWinFrom').value || $('#fWinTo').value || ($('#q').value || '').trim());
 
   $('#kpis').innerHTML =
-    kpi('v','患者总数', R.patients.length, hasFilter ? '点击清空全部筛选' : R.meta.nRows + ' 条销售记录',
+    kpi('v','患者总数', viewPats.length,
+        dStore ? ('本药房 ' + viewPats.length + ' / 全局 ' + nAll + ' 位 · ' + R.meta.nRows + ' 条销售记录')
+               : (hasFilter ? '点击清空全部筛选' : R.meta.nRows + ' 条销售记录'),
         'all', hasFilter, 'kpiAll') +
-    kpi('g','在治', c['在治'], pct(c['在治'],n) + ' · 点击筛选', '在治', fS === '在治', 'kpiActive') +
-    kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],n) + ' · 点击筛选', '断药预警', fS === '断药预警', 'kpiWarn') +
-    kpi('r','脱落', c['脱落'], pct(c['脱落'],n) + ' · 点击筛选', '脱落', fS === '脱落', 'kpiDrop') +
-    kpi('b','临床诊断待填', todoDiag, pct(todoDiag,n) + ' · 点击筛选', 'todoDiag', fF === 'todo') +
+    kpi('g','在治', c['在治'], pct(c['在治'],viewN) + (dStore ? ' · 本药房' : ' · 点击筛选'), '在治', fS === '在治', 'kpiActive') +
+    kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],viewN) + (dStore ? ' · 本药房' : ' · 点击筛选'), '断药预警', fS === '断药预警', 'kpiWarn') +
+    kpi('r','脱落', c['脱落'], pct(c['脱落'],viewN) + (dStore ? ' · 本药房' : ' · 点击筛选'), '脱落', fS === '脱落', 'kpiDrop') +
+    kpi('b','临床诊断待填', todoDiag, pct(todoDiag,viewN) + ' · 点击筛选', 'todoDiag', fF === 'todo') +
     kpi('','建档异常', I.missingKey.length,
         I.missingKey.length ? '点击查看缺失名单' : '无缺失 · 点击查看', 'missing', false);
 
@@ -931,8 +946,9 @@ function render(){
 
   /* 分布条 */
   $('#dist').innerHTML =
-    seg('d-g','在治',c['在治'],n,'kpiActive') + seg('d-a','断药预警',c['断药预警'],n,'kpiWarn') + seg('d-r','脱落',c['脱落'],n,'kpiDrop');
+    seg('d-g','在治',c['在治'],viewN,'kpiActive') + seg('d-a','断药预警',c['断药预警'],viewN,'kpiWarn') + seg('d-r','脱落',c['脱落'],viewN,'kpiDrop');
 
+  updateDStoreInfo();
   renderQuality();
   renderTable();
 }
@@ -949,7 +965,7 @@ function kpi(cls, lb, vl, ex, drill, active, tip){
 function drill(what){
   if (what === 'all'){
     $('#fStatus').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
-    $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = '';
+    $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#dStore').value = '';
     $('#q').value = '';
     render(); renderTable();
     return;
@@ -1275,7 +1291,7 @@ function applyLoaded(name, parsed){
   ST.header = parsed.header;
   ST.fmap = parsed.fmap || {};
   /* 切换文件时重置筛选，避免沿用旧选项 */
-  $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = '';
+  $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = ''; $('#dStore').value = '';
   $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
   $('#drop').hidden = true;
   $('#app').hidden = false;
@@ -1289,6 +1305,27 @@ function fillSelects(){
   });
   opt('#fStore', Object.keys(stores).sort());
   opt('#fHosp', Object.keys(hosps).sort());
+  opt('#dStore', Object.keys(stores).sort());              // 看板药房切换器同步同一份列表
+  updateDStoreInfo();
+}
+/* 看板药房切换器：影响 KPI / 分布 / 明细表 */
+function updateDStoreInfo(){
+  var bar = $('#dStoreBar');
+  if (!bar) return;
+  bar.hidden = ST.result.patients.length === 0;
+  var v = $('#dStore').value;
+  if (v && ST.result.patients.some(function(p){ return p.store === v; })){
+    var n = 0, m = 0;
+    ST.result.patients.forEach(function(p){ if (p.store === v){ n++; } });
+    ST.pool.forEach(function(r){ if (r.store === v || (r.V||'') === v || (r.invoiceName||'') === v) m++; });
+    var short = v.length > 16 ? v.slice(0,16)+'…' : v;
+    $('#dStoreCount').textContent = '已选「' + short + '」：' + n + ' 位患者 / ' + m + ' 条销售记录';
+    $('#dStoreClear').hidden = false;
+  } else {
+    $('#dStore').value = '';
+    $('#dStoreCount').textContent = '影响看板 KPI/分布 与 明细表 全部口径';
+    $('#dStoreClear').hidden = true;
+  }
 }
 function opt(sel, arr){
   $(sel).innerHTML = '<option value="">' + $(sel).options[0].text + '</option>' +
@@ -1472,7 +1509,20 @@ $('#btnImport').onclick = function(){ $('#file').click(); };
 $('#mask').onchange = renderTable;
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
-['#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFill','#fNote'].forEach(function(s){ $(s).onchange = renderTable; });
+['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFill','#fNote'].forEach(function(s){ $(s).onchange = renderTable; });
+/* 看板药房切换器是主控件：同时驱动 KPI 与明细表 */
+$('#dStore').onchange = function(){
+  $('#fStore').value = this.value;     // 同步到明细表的 fStore（fStore 自身改动会反向同步回来）
+  render();
+};
+$('#fStore').onchange = function(){
+  $('#dStore').value = this.value;     // 反向同步，保证两处显示一致
+  render();
+};
+$('#dStoreClear').onclick = function(){
+  $('#dStore').value = ''; $('#fStore').value = '';
+  render();
+};
 $('#btnCsv').onclick = exportExcel;
 $('#btnBak').onclick = exportBackup;
 $('#btnRes').onclick = function(){ $('#bakFile').click(); };
