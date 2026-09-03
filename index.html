@@ -171,6 +171,9 @@
 <div id="app" hidden>
 
   <div class="card bar">
+    <label class="sw"><b style="color:var(--ink2)">品种</b>
+      <select id="prodSel" title="切换查看品种（各品种数据池独立）"></select>
+    </label>
     <button id="btnImport" class="pri">导入新数据</button>
     <select id="impMode">
       <option value="replace">全量替换数据池</option>
@@ -549,19 +552,98 @@ var ST = { buf:null, rows:null, header:null, sheetName:'', sheetNames:[], result
 var LS_KEY  = 'patient_workbench_manual_v1';
 var LS_POOL = 'patient_workbench_pool_v1';
 
-/* ---------- 患者数据池（累计留存，增减都基于它计算） ---------- */
-function loadPool(){
-  try { ST.pool = JSON.parse(localStorage.getItem(LS_POOL) || '[]') || []; }
-  catch(e){ ST.pool = []; }
+/* ---------- 品种档案（每个品种独立数据池/填写/周期/诊断模式） ---------- */
+var PRODUCTS = [
+  { id:'nuobeige', label:'诺倍戈（达罗他胺）', match:['诺倍戈','达罗他胺'], daysPerBox:30,
+    diagMode:'dropdown', diagOpts:['NM-CRPC','mHSPC'] },
+  { id:'boruina',  label:'博瑞纳（洛拉替尼）', match:['博瑞纳','洛拉替尼'], daysPerBox:30,
+    diagMode:'source', diagOpts:[] }
+];
+var PID_STORAGE_KEY = 'patient_workbench_pid_v2';
+var PDS = {};                       // pid -> { pool:[], manual:{} } 各品种缓存
+
+function pidPoolKey(pid){   return 'patient_workbench_pool_v2_' + pid; }
+function pidManualKey(pid){ return 'patient_workbench_manual_v2_' + pid; }
+function productOf(pid){ for (var i=0;i<PRODUCTS.length;i++) if (PRODUCTS[i].id === pid) return PRODUCTS[i]; return null; }
+/* 识别一行属于哪个品种（读商品名称列）；不认识返回 null */
+function classifyRow(r){
+  var pn = String(r.prodName || r.invoiceName || '').trim();   // 取商品名（语义字段优先）
+  if (!pn) return null;
+  for (var i=0;i<PRODUCTS.length;i++){
+    var m = PRODUCTS[i].match;
+    for (var j=0;j<m.length;j++) if (pn.indexOf(m[j]) >= 0) return PRODUCTS[i];
+  }
+  return null;
 }
+function persistPid(pid){
+  try {
+    localStorage.setItem(pidPoolKey(pid), JSON.stringify(PDS[pid].pool));
+    localStorage.setItem(pidManualKey(pid), JSON.stringify(PDS[pid].manual));
+  } catch(e){ alert('品种「'+pid+'」数据保存失败（可能超出浏览器存储上限），请先用「导出备份」留存：' + e.message); }
+}
+/* 启动：读各品种池 + 迁移旧单池(v1)到诺倍戈 + 恢复上次品种 */
+function bootstrapPids(){
+  PRODUCTS.forEach(function(p){ PDS[p.id] = { pool: [], manual: {} }; });
+  PRODUCTS.forEach(function(p){
+    try { PDS[p.id].pool   = JSON.parse(localStorage.getItem(pidPoolKey(p.id))   || '[]') || []; } catch(e){ PDS[p.id].pool = []; }
+    try { PDS[p.id].manual = JSON.parse(localStorage.getItem(pidManualKey(p.id)) || '{}') || {}; } catch(e){ PDS[p.id].manual = {}; }
+  });
+  /* 旧版单池 v1 → 归入诺倍戈（仅当诺倍戈还没有 v2 数据且旧池非空） */
+  if (!PDS.nuobeige.pool.length){
+    var old = [], oldM = {};
+    try { old  = JSON.parse(localStorage.getItem(LS_POOL) || '[]') || []; } catch(e){}
+    try { oldM = JSON.parse(localStorage.getItem(LS_KEY)  || '{}') || {}; } catch(e){}
+    if (old.length){ PDS.nuobeige.pool = old; PDS.nuobeige.manual = oldM; persistPid('nuobeige'); }
+  }
+  var saved = null;
+  try { saved = localStorage.getItem(PID_STORAGE_KEY); } catch(e){}
+  var pid = 'nuobeige';
+  for (var i=0;i<PRODUCTS.length;i++) if (PRODUCTS[i].id === saved) pid = saved;
+  switchProduct(pid);
+}
+/* 顶栏品种下拉填充与切换 */
+function fillProdSel(){
+  var sel = $('#prodSel');
+  if (!sel) return;
+  sel.innerHTML = PRODUCTS.map(function(p){
+    return '<option value="' + p.id + '"' + (p.id === ST.pid ? ' selected' : '') + '>' + p.label + '</option>';
+  }).join('');
+}
+function onSwitchProduct(){
+  switchProduct($('#prodSel').value);
+  ST.sheetName = ''; ST.header = null; ST.fmap = {};
+  fillProdSel();
+  recompute();
+  fillSelects();
+  refreshHeader();
+  updatePoolInfo();
+  syncImpMode();
+  $('#drop').hidden = !!ST.pool.length;
+  $('#app').hidden = !ST.pool.length;
+}
+/* 把当前品种换成 pid：先持久化旧品种，再指向新品种数据（UI 刷新由调用方负责） */
+function switchProduct(pid){
+  if (ST.pid && ST.pid !== pid) persistPid(ST.pid);
+  ST.pid = pid;
+  ST.pool = PDS[pid].pool;
+  ST.manual = PDS[pid].manual;
+  try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
+  ST.result = null; ST.importMsg = '';
+  /* 换品种后重置筛选，避免沿用上个品种 */
+  ['#q','#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFill','#fNote','#dStore'].forEach(function(s){
+    var el = $(s); if (el) el.value = '';
+  });
+}
+
+/* ---------- 患者数据池（累计留存，增减都基于它计算） ---------- */
+function loadPool(){ /* 由 bootstrapPids 统一管理，保留空实现防旧调用报错 */ }
 function savePool(){
-  try { localStorage.setItem(LS_POOL, JSON.stringify(ST.pool)); }
-  catch(e){ alert('数据池保存失败（可能超出浏览器本地存储上限），请先用「导出备份」留存：' + e.message); }
+  if (ST.pid) persistPid(ST.pid);
 }
 function poolDateRange(){
   var min = null, max = null;
   ST.pool.forEach(function(r){
-    var ms = E.parseDateLike(r.B);
+    var ms = E.parseDateLike(r.saleTime !== undefined ? r.saleTime : r.B);
     if (ms == null) return;
     if (min == null || ms < min) min = ms;
     if (max == null || ms > max) max = ms;
@@ -572,9 +654,11 @@ function updatePoolInfo(){
   var bar = $('#poolBar');
   if (!ST.pool.length){ bar.hidden = true; return; }
   var rg = poolDateRange();
+  var pr = productOf(ST.pid);
   bar.hidden = false;
   bar.innerHTML = '<b>患者数据池</b>：' + ST.pool.length + ' 条销售记录' +
     (rg[0] ? '　·　销售时间 ' + E.fmtDate(rg[0]) + ' ~ ' + E.fmtDate(rg[1]) : '') +
+    '　·　品种 ' + (pr ? pr.label : ST.pid) + '，每盒 ' + (pr ? pr.daysPerBox : 30) + ' 天' +
     '　·　保存在本机浏览器，换电脑请用「导出备份(含数据池)」';
 }
 /* 去重键：同一患者 + 同一订单 + 同一商品 + 同一时刻 + 同一数量 = 同一条记录
@@ -610,52 +694,85 @@ function stripRow(r){
 function syncImpMode(){
   $('#impMode').value = ST.pool.length ? 'append' : 'replace';
 }
-/* 把本次文件行按所选模式并入数据池 */
-function applyImport(){  var rows = ST.rows || [];
+/* 把本次文件行按所选模式并入数据池；行按商品名自动分拣到对应品种池 */
+function applyImport(){
+  var rows = ST.rows || [];
   var mode = $('#impMode').value;
-  if (!ST.pool.length) mode = 'replace';           // 池为空时无从追加
-  var added = 0, dup = 0, conflict = 0;
+  var pr = productOf(ST.pid);
+  if (!pr) { ST.importMsg = '未定义品种，无法导入。'; return; }
 
-  if (mode === 'replace'){
-    ST.pool = rows;
-    added = rows.length;
-    ST.importMsg = '已全量替换：数据池现有 ' + ST.pool.length + ' 条销售记录。';
+  /* 1) 按品种分拣：有商品名称列则逐行识别；无该列则整表按当前品种导入（无法判断只能当当前品种） */
+  var batches = {}, skip = 0, noProdCol = !(ST.fmap && ST.fmap.prodName !== undefined);
+  if (noProdCol){
+    batches[ST.pid] = rows;
   } else {
-    var idx = {};
-    ST.pool.forEach(function(r, i){ idx[poolKey(r)] = i; });
     rows.forEach(function(r){
-      var k = poolKey(r);
-      if (idx[k] === undefined){
-        idx[k] = ST.pool.length;
-        ST.pool.push(r);
-        added++;
-      } else {
-        dup++;
-        /* 键相同但其他字段不同（如药房系统里修正了年龄/医生）→ 以新数据为准 */
-        if (JSON.stringify(stripRow(ST.pool[idx[k]])) !== JSON.stringify(stripRow(r))){
-          ST.pool[idx[k]] = r;
-          conflict++;
-        }
-      }
+      var p = classifyRow(r);
+      if (!p) { skip++; return; }
+      (batches[p.id] || (batches[p.id] = [])).push(r);
     });
-    ST.importMsg = '已增量追加：新增 ' + added + ' 条，跳过重复 ' + (dup - conflict) +
-      ' 条' + (conflict ? '，按新数据更新 ' + conflict + ' 条已有记录' : '') +
-      '，数据池现有 ' + ST.pool.length + ' 条。';
+  }
+
+  var anyReplace = false;
+  Object.keys(batches).forEach(function(pid){
+    var inRows = batches[pid];
+    var target = PDS[pid].pool;
+    var localMode = mode;
+    if (!target.length && mode === 'append') localMode = 'replace';  // 目标池空则无从追加
+    if (localMode === 'replace'){
+      PDS[pid].pool = inRows.slice();
+      persistPid(pid);
+    } else {
+      var idx = {};
+      target.forEach(function(r, i){ idx[poolKey(r)] = i; });
+      var added = 0, dup = 0, conflict = 0;
+      inRows.forEach(function(r){
+        var k = poolKey(r);
+        if (idx[k] === undefined){
+          idx[k] = target.length; target.push(r); added++;
+        } else {
+          dup++;
+          if (JSON.stringify(stripRow(target[idx[k]])) !== JSON.stringify(stripRow(r))){
+            target[idx[k]] = r; conflict++;
+          }
+        }
+      });
+      persistPid(pid);
+    }
+    if (pid === ST.pid){ ST.pool = PDS[pid].pool; anyReplace = true; }
+  });
+
+  /* 当前视图品种若未被此文件涉及，确保 ST.pool/manual 仍指向它自己的池 */
+  if (!anyReplace){ ST.pool = PDS[ST.pid].pool; }
+  ST.manual = PDS[ST.pid].manual;
+
+  /* 2) 汇总提示 */
+  var parts = [];
+  Object.keys(batches).forEach(function(pid){
+    var p = productOf(pid), n = batches[pid].length;
+    parts.push(p.label + ' ' + n + ' 条');
+  });
+  ST.importMsg = '已按品种分拣导入：' + (parts.join('，') || '(无已建档品种)');
+  if (noProdCol) ST.importMsg = '表中未找到「商品名称」列，全部 ' + rows.length + ' 行已按当前品种导入：' + (productOf(ST.pid) ? productOf(ST.pid).label : ST.pid);
+  if (skip) ST.importMsg += '。另有 ' + skip + ' 行属未建档品种（已跳过，需要时再建档案）';
+  if (Object.keys(batches).length > 1){
+    ST.importMsg += '。可切换到其他品种查看其数据池';
   }
   var nF = ST.fmap ? Object.keys(ST.fmap).length : 0;
-  if (nF) ST.importMsg += ' 按表头识别到 ' + nF + ' 个字段（列位置不影响）。';
-  savePool();
-  updatePoolInfo();
-  $('#app').hidden = false;
-  $('#drop').hidden = true;
+  if (nF) ST.importMsg += '。按表头识别到 ' + nF + ' 个字段（列位置不影响）';
+
+  savePool(); saveManual();
+  $('#drop').hidden = true; $('#app').hidden = false;
   recompute();
   fillSelects();
   refreshHeader();
-  syncImpMode();                                     // 导入完成后按池内数据量刷新默认模式
+  updatePoolInfo();
+  syncImpMode();
 }
 
-/* 临床诊断选项（用户指定，只此两项） */
-var DIAG_OPTS = ['NM-CRPC', 'mHSPC'];
+function curProduct(){ return productOf(ST.pid); }
+
+/* （诊断选项已并入品种档案 PRODUCTS[].diagOpts） */
 
 /* 明细表列（压缩合并：17 列 → 11 列；完整字段仍保留在 CSV 导出中） */
 var COLS = [
@@ -685,18 +802,16 @@ function maskPhone(s){
   return s.slice(0,3) + '*'.repeat(s.length-7) + s.slice(-4);
 }
 /* ---------- 人工字段 ---------- */
-function loadManual(){
-  try { ST.manual = JSON.parse(localStorage.getItem(LS_KEY) || '{}') || {}; }
-  catch(e){ ST.manual = {}; }
-}
+function loadManual(){ /* 由 bootstrapPids 统一管理 */ }
 function saveManual(){
+  if (!ST.pid) return;
   /* 只保留真正填过内容的患者，避免把空壳条目写进备份 */
   var clean = {};
   Object.keys(ST.manual).forEach(function(k){
     var m = ST.manual[k] || {};
     if (m.diag || m.pay || m.note || m.noteDate) clean[k] = m;
   });
-  try { localStorage.setItem(LS_KEY, JSON.stringify(clean)); }
+  try { PDS[ST.pid].manual = clean; persistPid(ST.pid); }
   catch(e){ alert('本地存储写入失败：' + e.message); }
 }
 function manualOf(k){
@@ -815,8 +930,15 @@ function recompute(){
       return !(typeof q === 'number' && q < 0);
     });
   }
-  ST.result = E.compute(src, {});
+  ST.result = E.compute(src, { daysPerBox: curProduct() ? curProduct().daysPerBox : 30 });
   render();
+}
+
+/* 诊断信息是否已具备：dropdown=人工选了诊断；source=底表有适应症 */
+function hasDiagField(p, m){
+  var prod = curProduct();
+  if (prod && prod.diagMode === 'source') return !!(p.indSrc || p.diagSrc);
+  return !!m.diag;
 }
 
 /* ---------- 渲染 ---------- */
@@ -843,8 +965,8 @@ function filtered(){
     }
     if (ff || fn){
       var m = manualOf(p.key);
-      if (ff === 'todo' && m.diag) return false;
-      if (ff === 'done' && !m.diag) return false;
+      if (ff === 'todo' && hasDiagField(p, m)) return false;
+      if (ff === 'done' && !hasDiagField(p, m)) return false;
       if (ff === 'note' && !m.note) return false;
       /* 按备注日期筛选：从未备注 / 今天 / 近 N 天 / 超过 N 天未随访 */
       if (fn){
@@ -899,6 +1021,9 @@ function render(){
     nd.innerHTML = '这张工作表缺少底表必需的列：<b>' + missCols.join('、') + '</b>，' +
       '看起来不是销售底表，以下统计不可信。请点上方「导入新数据」重新选择销售底表文件' +
       '（系统会自动挑出表头含销售时间、销售数量、会员电话、开票抬头的工作表，列在第几列都没关系）。';
+  } else if (ST.importMsg){
+    nd.hidden = false;
+    nd.textContent = ST.importMsg;
   } else if (R.meta.nPatients === 0){
     nd.hidden = false;
     nd.innerHTML = '没有从这张表识别到任何患者，请确认选择的是销售底表。';
@@ -906,9 +1031,6 @@ function render(){
     nd.hidden = false;
     nd.innerHTML = '有 <b>'+I.badDate.length+'</b> 行的销售时间无法解析，' +
       '多于可解析的 '+R.meta.nRowsWithDate+' 行，请确认是否选对了工作表。';
-  } else if (ST.importMsg){
-    nd.hidden = false;
-    nd.textContent = ST.importMsg;
   } else {
     nd.hidden = true;
   }
@@ -920,12 +1042,19 @@ function render(){
   var viewN = viewPats.length || 1;
   var c = { '在治':0, '断药预警':0, '脱落':0 };
   viewPats.forEach(function(p){ c[p.status] = (c[p.status]||0)+1; });
-  var todoDiag = viewPats.filter(function(p){ return !manualOf(p.key).diag; }).length;
+  var todoDiag = viewPats.filter(function(p){ return !hasDiagField(p, manualOf(p.key)); }).length;
   var nAll = viewAll.length;
 
   var fS = $('#fStatus').value, fF = $('#fFill').value, fN = $('#fNote').value;
   var hasFilter = !!(fS || fF || fN || $('#fStore').value || $('#fHosp').value ||
                      $('#fWinFrom').value || $('#fWinTo').value || ($('#q').value || '').trim());
+  var sourceDiag = curProduct() && curProduct().diagMode === 'source';
+  var diagKpiLabel = sourceDiag ? '适应症缺失' : '临床诊断待填';
+  var diagDoneTxt  = sourceDiag ? '点击查看有适应症患者' : '点击筛选';
+  /* fFill 下拉文案随品种模式切换 */
+  var fFillSel = $('#fFill');
+  if (fFillSel.options[1]) fFillSel.options[1].text = sourceDiag ? '适应症缺失' : '临床诊断待填';
+  if (fFillSel.options[2]) fFillSel.options[2].text = sourceDiag ? '有适应症' : '临床诊断已填';
 
   $('#kpis').innerHTML =
     kpi('v','患者总数', viewPats.length,
@@ -935,7 +1064,7 @@ function render(){
     kpi('g','在治', c['在治'], pct(c['在治'],viewN) + (dStore ? ' · 本药房' : ' · 点击筛选'), '在治', fS === '在治', 'kpiActive') +
     kpi('a','断药预警', c['断药预警'], pct(c['断药预警'],viewN) + (dStore ? ' · 本药房' : ' · 点击筛选'), '断药预警', fS === '断药预警', 'kpiWarn') +
     kpi('r','脱落', c['脱落'], pct(c['脱落'],viewN) + (dStore ? ' · 本药房' : ' · 点击筛选'), '脱落', fS === '脱落', 'kpiDrop') +
-    kpi('b','临床诊断待填', todoDiag, pct(todoDiag,viewN) + ' · 点击筛选', 'todoDiag', fF === 'todo') +
+    kpi('b', diagKpiLabel, todoDiag, pct(todoDiag,viewN) + ' · ' + diagDoneTxt, 'todoDiag', fF === 'todo') +
     kpi('','建档异常', I.missingKey.length,
         I.missingKey.length ? '点击查看缺失名单' : '无缺失 · 点击查看', 'missing', false);
 
@@ -1153,12 +1282,20 @@ function esc(s){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function tdDiag(p, m){
-  /* 临床诊断只允许二选一（用户指定）：NM-CRPC / mHSPC；历史数据里若已有其他值则保留显示 */
+  var prod = curProduct();
+  /* 模式 source：诊断列直接显示底表末次适应症（只读，无人工下拉） */
+  if (prod && prod.diagMode === 'source'){
+    var val = p.indSrc || p.diagSrc || '';
+    return '<td><span class="diag-src"' + (val ? ' title="来自底表末次适应症"' : '') + '>'
+      + (val ? esc(val) : '<span class="ref">（底表无适应症）</span>') + '</span></td>';
+  }
+  var optsArr = (prod && prod.diagOpts) || ['NM-CRPC', 'mHSPC'];
+  /* 临床诊断只允许档案内选项；历史数据里若已有其他值则保留显示 */
   var opts = ['<option value="">未确认</option>'];
-  DIAG_OPTS.forEach(function(d){
-    opts.push('<option'+(m.diag === d ? ' selected' : '')+'>'+d+'</option>');
+  optsArr.forEach(function(d){
+    opts.push('<option'+(m.diag === d ? ' selected' : '')+'>'+esc(d)+'</option>');
   });
-  if (m.diag && DIAG_OPTS.indexOf(m.diag) < 0) opts.push('<option selected>'+esc(m.diag)+'</option>');
+  if (m.diag && optsArr.indexOf(m.diag) < 0) opts.push('<option selected>'+esc(m.diag)+'</option>');
   /* 小字参考：优先末次适应症(用户指定)，底表没有适应症时退回临床诊断列 */
   var ref = p.indSrc ? '<span class="ref">适应症参考：'+esc(p.indSrc)+'</span>'
           : (p.diagSrc ? '<span class="ref">底表参考：'+esc(p.diagSrc)+'</span>' : '');
@@ -1190,16 +1327,19 @@ function csvCell(v){
 function exportExcel(){
   var list = filtered();
   var mask = $('#mask').checked;                       // 跟随"姓名/电话脱敏"开关
-  var head = ['患者姓名','年龄','电话','首次购药时间','累计购药数量','最后一次购药时间','最后一次购药数量','理论下次购药日期','临床诊断','末次购药医院','处方医生','支付方式','存续状态','备注','备注日期'];
+  var sourceDiag = curProduct() && curProduct().diagMode === 'source';
+  var diagHead = sourceDiag ? '适应症（底表）' : '临床诊断';
+  var head = ['患者姓名','年龄','电话','首次购药时间','累计购药数量','最后一次购药时间','最后一次购药数量','理论下次购药日期',diagHead,'末次购药医院','处方医生','支付方式','存续状态','备注','备注日期'];
   var aoa = [head];
   list.forEach(function(p){
     var m = manualOf(p.key);
+    var diagVal = sourceDiag ? (p.indSrc || p.diagSrc || '') : m.diag;
     aoa.push([
       mask ? maskName(p.name) : p.name,
       p.ageBest==null?'':p.ageBest,
       mask ? maskPhone(p.phone) : p.phone,
       E.fmtDate(p.firstBuyMs), p.totalQty, E.fmtDate(p.lastBuyMs), p.lastQty,
-      E.fmtDate(p.nextMs), m.diag, p.hospital, p.doctor,
+      E.fmtDate(p.nextMs), diagVal, p.hospital, p.doctor,
       m.pay || p.pay, p.status, m.note, m.noteDate
     ]);
   });
@@ -1207,7 +1347,7 @@ function exportExcel(){
   ws['!cols'] = [12,6,15,12,13,13,14,14,11,22,10,22,10,30,11].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '随访表');
-  XLSX.writeFile(wb, '患者工作台_'+stamp()+'.xlsx');
+  XLSX.writeFile(wb, (curProduct() ? curProduct().label.split('（')[0] : '患者') + '工作台_' + stamp() + '.xlsx');
 }
 function exportMissing(){
   var I = ST.result.issues;
@@ -1219,8 +1359,18 @@ function exportMissing(){
   if (I.missingKey.length) download('建档缺失名单_'+stamp()+'.csv', '\uFEFF'+lines.join('\r\n'), 'text/csv;charset=utf-8');
 }
 function exportBackup(){
+  /* 备份含全部品种的池与填写，避免只导当前品种丢其他品种 */
+  var all = {};
+  PRODUCTS.forEach(function(p){
+    var clean = {};
+    Object.keys(PDS[p.id].manual).forEach(function(k){
+      var m = PDS[p.id].manual[k] || {};
+      if (m.diag || m.pay || m.note || m.noteDate) clean[k] = m;
+    });
+    all[p.id] = { pool: PDS[p.id].pool, manual: clean };
+  });
   download('工作台备份_'+stamp()+'.json',
-    JSON.stringify({v:2, at:new Date().toISOString(), data:ST.manual, pool:ST.pool}, null, 1),
+    JSON.stringify({v:3, at:new Date().toISOString(), products:all, cur:ST.pid}, null, 1),
     'application/json');
 }
 function importBackup(file){
@@ -1228,24 +1378,45 @@ function importBackup(file){
   fr.onload = function(){
     try{
       var o = JSON.parse(fr.result);
-      var d = o && o.data ? o.data : o;
-      var n = 0;
-      Object.keys(d).forEach(function(k){
-        ST.manual[k] = { diag:d[k].diag||'', pay:d[k].pay||'', note:d[k].note||'', noteDate:d[k].noteDate||'' };
-        n++;
-      });
-      saveManual();
-      var msg = '已导入 '+n+' 位患者的填写内容。';
-      if (o && o.pool && o.pool.length){
-        ST.pool = o.pool; savePool(); updatePoolInfo();
-        msg += ' 数据池已恢复：' + ST.pool.length + ' 条销售记录。';
+      var msg = [];
+      if (o && o.v === 3 && o.products){
+        /* 新版：按品种恢复 */
+        PRODUCTS.forEach(function(p){
+          var b = o.products[p.id];
+          if (b){
+            if (b.pool) PDS[p.id].pool = b.pool;
+            if (b.manual) PDS[p.id].manual = b.manual;
+            persistPid(p.id);
+            msg.push(p.label + '：' + (b.pool ? b.pool.length : 0) + ' 条记录');
+          }
+        });
+        switchProduct(o.cur && productOf(o.cur) ? o.cur : ST.pid);
+      } else if (o && o.v === 2 && o.pool){
+        /* 旧版 v2：pool 归当前品种，填写并入当前品种 */
+        var n = 0;
+        Object.keys(o.data||{}).forEach(function(k){
+          ST.manual[k] = { diag:o.data[k].diag||'', pay:o.data[k].pay||'', note:o.data[k].note||'', noteDate:o.data[k].noteDate||'' };
+          n++;
+        });
+        PDS[ST.pid].pool = o.pool;
+        saveManual(); savePool();
+        msg.push(ST.pid + '：' + o.pool.length + ' 条记录，填写 ' + n + ' 位');
+      } else {
+        /* 老备份只有 manual(data) */
+        var d = o && o.data ? o.data : o;
+        Object.keys(d).forEach(function(k){
+          ST.manual[k] = { diag:d[k].diag||'', pay:d[k].pay||'', note:d[k].note||'', noteDate:d[k].noteDate||'' };
+        });
+        saveManual();
+        msg.push('填写内容已并入 ' + ST.pid);
       }
       syncImpMode();
       if (ST.pool.length){
         $('#drop').hidden = true; $('#app').hidden = false;
-        recompute(); fillSelects(); refreshHeader();
+        fillProdSel();
+        recompute(); fillSelects(); refreshHeader(); updatePoolInfo();
       } else { render(); }
-      alert(msg);
+      alert('备份已恢复：' + msg.join('；'));
     }catch(e){ alert('备份文件格式不正确：'+e.message); }
   };
   fr.readAsText(file);
@@ -1254,8 +1425,10 @@ function importBackup(file){
 /* ---------- 载入 ---------- */
 function refreshHeader(){
   var n = ST.result ? ST.result.patients.length : 0;
+  var pr = curProduct();
   $('#hsub').textContent = '患者池：' + ST.pool.length + ' 条销售记录 · ' + n + ' 位患者　|　' +
-    ST.sheetName + '　|　离线运行，数据不出本机';
+    (pr ? pr.label + '（每盒' + pr.daysPerBox + '天）' : '') +
+    (ST.sheetName ? '　|　' + ST.sheetName : '') + '　|　离线运行，数据不出本机';
 }
 /* 自动挑底表：按候选顺序逐张试，取第一张"必需列齐全"的工作表。
    比让人手工选更稳——表被改名、顺序变了都不会选错。 */
@@ -1541,11 +1714,14 @@ $('#btnClearPool').onclick = function(){
   syncImpMode();                                     // 池已空，默认模式回到全量替换
 };
 
+/* 切换品种事件 */
+$('#prodSel').onchange = onSwitchProduct;
+
 /* ---------- 启动：有数据池就直接打开，无需文件 ---------- */
-loadManual();
-loadPool();
+bootstrapPids();
 bindTips();
 bindDefTips();
+fillProdSel();
 syncImpMode();                                       // 启动时按池内数据量定默认导入模式
 if (ST.pool.length){
   $('#drop').hidden = true;
@@ -1554,6 +1730,8 @@ if (ST.pool.length){
   recompute();
   fillSelects();
   refreshHeader();
+} else {
+  updatePoolInfo();
 }
 })();
 </script>
