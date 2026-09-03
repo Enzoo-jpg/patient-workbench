@@ -139,6 +139,10 @@
     border-radius:7px;padding:6px 12px;font-size:12.5px;margin-bottom:10px}
   .sw{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);cursor:pointer}
   .sw input{cursor:pointer}
+  .dr{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--ink2)}
+  .dr input[type=date]{padding:2px 4px;border:1px solid #EFE6CF;border-radius:6px;
+    font:inherit;font-size:12.5px;background:#FFFDF6;color:var(--ink);min-width:118px}
+  .dr input[type=date]:focus{outline:none;border-color:var(--violet);background:#fff}
 
   /* 按钮悬浮注释 */
   #tip{position:fixed;z-index:99;pointer-events:none;max-width:320px;
@@ -205,13 +209,9 @@
         <option>在治</option><option>断药预警</option><option>脱落</option></select>
       <select id="fStore"><option value="">全部药房</option></select>
       <select id="fHosp"><option value="">全部医院</option></select>
-      <select id="fWin">
-        <option value="">全部时间</option>
-        <option value="1">末次购药 近 1 个月</option>
-        <option value="3">末次购药 近 3 个月</option>
-        <option value="6">末次购药 近 6 个月</option>
-        <option value="12">末次购药 近 12 个月</option>
-      </select>
+      <label class="dr">理论下次购药
+        <input type="date" id="fWinFrom" placeholder="起"> ～ <input type="date" id="fWinTo" placeholder="止">
+      </label>
       <select id="fFill">
         <option value="">全部填写状态</option>
         <option value="todo">临床诊断待填</option>
@@ -814,16 +814,20 @@ function recompute(){
 function filtered(){
   var q  = ($('#q').value || '').trim().toLowerCase();
   var fs = $('#fStatus').value, fst = $('#fStore').value;
-  var fh = $('#fHosp').value, fw = $('#fWin').value, ff = $('#fFill').value;
+  var fh = $('#fHosp').value, ff = $('#fFill').value;
   var fn = $('#fNote').value;
-  var now = Date.now();
-  var cut = fw ? now - (+fw)*30*86400000 : null;
+  /* 理论下次购药日期区间：起/止任一为空表示不限；止含当天结束 */
+  var fFrom = $('#fWinFrom').value, fTo = $('#fWinTo').value;
+  var fromMs = fFrom ? E.parseDateLike(fFrom) : null;
+  var toMs   = fTo   ? E.parseDateLike(fTo) : null;
+  if (toMs != null) toMs = toMs + 86400000 - 1;          // 含当天 23:59:59.999
 
   var list = ST.result.patients.filter(function(p){
     if (fs && p.status !== fs) return false;
     if (fst && p.store !== fst) return false;
     if (fh && p.hospital !== fh) return false;
-    if (cut !== null && p.lastBuyMs < cut) return false;
+    if (fromMs != null && p.nextMs < fromMs) return false;
+    if (toMs != null && p.nextMs > toMs) return false;
     if (q){
       var hay = (p.name+' '+p.phone+' '+p.doctor+' '+p.hospital+' '+p.diagSrc).toLowerCase();
       if (hay.indexOf(q) < 0) return false;
@@ -908,7 +912,7 @@ function render(){
 
   var fS = $('#fStatus').value, fF = $('#fFill').value, fN = $('#fNote').value;
   var hasFilter = !!(fS || fF || fN || $('#fStore').value || $('#fHosp').value ||
-                     $('#fWin').value || ($('#q').value || '').trim());
+                     $('#fWinFrom').value || $('#fWinTo').value || ($('#q').value || '').trim());
 
   $('#kpis').innerHTML =
     kpi('v','患者总数', R.patients.length, hasFilter ? '点击清空全部筛选' : R.meta.nRows + ' 条销售记录',
@@ -945,7 +949,7 @@ function kpi(cls, lb, vl, ex, drill, active, tip){
 function drill(what){
   if (what === 'all'){
     $('#fStatus').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
-    $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWin').value = '';
+    $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = '';
     $('#q').value = '';
     render(); renderTable();
     return;
@@ -1272,7 +1276,7 @@ function applyLoaded(name, parsed){
   ST.fmap = parsed.fmap || {};
   /* 切换文件时重置筛选，避免沿用旧选项 */
   $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = '';
-  $('#fHosp').value = ''; $('#fWin').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
+  $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
   $('#drop').hidden = true;
   $('#app').hidden = false;
   applyImport();
@@ -1468,7 +1472,7 @@ $('#btnImport').onclick = function(){ $('#file').click(); };
 $('#mask').onchange = renderTable;
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
-['#fStatus','#fStore','#fHosp','#fWin','#fFill','#fNote'].forEach(function(s){ $(s).onchange = renderTable; });
+['#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFill','#fNote'].forEach(function(s){ $(s).onchange = renderTable; });
 $('#btnCsv').onclick = exportExcel;
 $('#btnBak').onclick = exportBackup;
 $('#btnRes').onclick = function(){ $('#bakFile').click(); };
