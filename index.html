@@ -432,10 +432,14 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         store: str(pick(r, 'Y')),
         prodName: str(pick(r, 'G')),
         memberName: str(pick(r, 'N')),
-        memberNo: str(pick(r, 'M'))
+        memberNo: str(pick(r, 'M')),
+        orderNo: str(pick(r, 'E'))
       };
 
-      if (!name || !phone) { issues.missingKey.push({ row: rowNo, name: name, phone: phone }); return; }
+      // 患者键口径（用户 2026-09-07 确认）：抬头+电话全空但订单号存在 -> 订单号兜底独立成行；
+      // 仅缺其一 -> 仍计建档异常（身份信息不完整，不并入其他患者）
+      if (!name && !phone && rec.orderNo) { rec.orderFallback = rec.orderNo; }
+      else if (!name || !phone) { issues.missingKey.push({ row: rowNo, name: name, phone: phone }); return; }
       if (name.indexOf('|') >= 0 || phone.indexOf('|') >= 0) issues.pipeInKey.push(rowNo);
       if (qty < 0) issues.negQty.push(rowNo);
 
@@ -445,7 +449,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     // --- 分组 ---
     var groups = {};
     recs.forEach(function (x) {
-      var key = x.name + '|' + x.phone;
+      var key = x.orderFallback ? '@订单:' + x.orderFallback : (x.name + '|' + x.phone);
       (groups[key] || (groups[key] = [])).push(x);
     });
 
@@ -489,6 +493,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         key: key,
         name: tail.name,
         phone: tail.phone,
+        orderNo: tail.orderFallback || '',   // 订单号兜底行的展示标识（抬头+电话全空）
         ageRaw: ageRaw,
         ageBest: ageBest,
         firstBuyMs: first,
@@ -557,6 +562,8 @@ var PRODUCTS = [
   { id:'nuobeige', label:'诺倍戈（达罗他胺）', match:['诺倍戈','达罗他胺'], daysPerBox:30,
     diagMode:'dropdown', diagOpts:['NM-CRPC','mHSPC'] },
   { id:'boruina',  label:'博瑞纳（洛拉替尼）', match:['博瑞纳','洛拉替尼'], daysPerBox:30,
+    diagMode:'source', diagOpts:[] },
+  { id:'ruifu',    label:'瑞福（乌帕替尼）', match:['瑞福','乌帕替尼'], daysPerBox:28,
     diagMode:'source', diagOpts:[] }
 ];
 var PID_STORAGE_KEY = 'patient_workbench_pid_v2';
@@ -1204,7 +1211,7 @@ function renderTable(){
     var m = manualOf(p.key);
     var pay = m.pay || p.pay || '';
     return '<tr>' +
-      td2(p.name ? (mask ? maskName(p.name) : p.name) : '',
+      td2(p.name ? (mask ? maskName(p.name) : p.name) : (p.orderNo ? '订单 ' + p.orderNo : ''),
           p.ageBest == null ? '' : p.ageBest + ' 岁') +
       '<td><span class="mono">' + esc(p.phone ? (mask ? maskPhone(p.phone) : p.phone) : '') + '</span></td>' +
       td2(E.fmtDate(p.firstBuyMs), '累计 ' + p.totalQty + ' 盒') +
@@ -1335,7 +1342,7 @@ function exportExcel(){
     var m = manualOf(p.key);
     var diagVal = sourceDiag ? (p.indSrc || p.diagSrc || '') : m.diag;
     aoa.push([
-      mask ? maskName(p.name) : p.name,
+      mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : '')),
       p.ageBest==null?'':p.ageBest,
       mask ? maskPhone(p.phone) : p.phone,
       E.fmtDate(p.firstBuyMs), p.totalQty, E.fmtDate(p.lastBuyMs), p.lastQty,
