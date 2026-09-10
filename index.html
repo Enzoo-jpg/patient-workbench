@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-page-node-id="PZrvSEiO0hOfRCoruvCRAy">
-<head data-page-node-id="mUMPwD7SkYSxEAZYQy9ABE">
-<meta charset="UTF-8" data-page-node-id="IYV52tygaQcBs7CUkYlzMo">
-<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="IkffMHuZfAtTP0ww8pcCYd">
+<html lang="zh-CN" data-page-node-id="pHz3TKXP7wRpVgRJTweM0Z">
+<head data-page-node-id="10Uf48q75QDCbdo0z2t2Vg">
+<meta charset="UTF-8" data-page-node-id="XXPjP4ABgk1PzgtDaZ6NvD">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="fuAPlIMW7X93CG708K1Dkk">
 <title>销售患者工作台</title>
 <style>
   :root{
@@ -152,103 +152,103 @@
   #tip .t{display:block;font-weight:600;margin-bottom:2px;color:#fff}
 </style>
 </head>
-<body data-page-node-id="xzDlYss3nKjEsukKsz51xd">
-<div class="wrap" data-page-node-id="ksDPhhRNF3Dol9L5xrcOMK">
+<body data-page-node-id="OZU4ol1YRHZEal2vyLbncC">
+<div class="wrap" data-page-node-id="m1GqbqoDpN2qtgxmGwLWxq">
 
-<header data-page-node-id="OrvWZOcu30TmAGn4ZWt9oZ">
-  <h1 data-page-node-id="hK8zTFFzdv89zezWfUEaD7">销售患者工作台</h1>
-  <span class="sub" id="hsub" data-page-node-id="soX51fH6PFeIAHNjcLedYR">刷新式 · 离线运行 · 数据不出本机</span>
+<header data-page-node-id="eM9ab8SfyGoVo9pOYBRYmS">
+  <h1 data-page-node-id="qabHOU5FsuFzkwFuB5Pe9G">销售患者工作台</h1>
+  <span class="sub" id="hsub" data-page-node-id="AaLHUOtMT9E6a20DQl5nxl">刷新式 · 离线运行 · 数据不出本机</span>
 </header>
 
-<div id="drop" data-page-node-id="1LF2vDgW6BBsKplpabiEAE">
-  <h2 data-page-node-id="AtwEPBEB7wWKI4GA4K0ZlW">载入销售数据</h2>
-  <p data-page-node-id="17vzB0sVBpiq3AK7ohSTAs">把 .xlsx 文件拖到这里，或点击选择</p>
-  <div class="hint" data-page-node-id="LMn47bECWtkWb05mG5AAgN">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br data-page-node-id="7Rr7TasEaFhJread9Fiwv6">
+<div id="drop" data-page-node-id="WjnEkcceMVg1lZAIfdmHF0">
+  <h2 data-page-node-id="AbDE37O72NI28ZWmBc9HD1">载入销售数据</h2>
+  <p data-page-node-id="nwNLbg14HWkia60q1PCCFQ">把 .xlsx 文件拖到这里，或点击选择</p>
+  <div class="hint" data-page-node-id="gRIYB7ILd5oIaZotZQ6gmu">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br data-page-node-id="SWIWBw70F6dH23mGkAVOc9">
   患者池与已填写的诊断/备注都保存在本机浏览器，下次打开无需再放文件。</div>
-  <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden data-page-node-id="wGNCOhlhZjzze86aivYHCE">
+  <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden data-page-node-id="8d7g5i8DA2JsoLyglxQNwR">
 </div>
 
-<div id="app" hidden data-page-node-id="DMLGsrwt4xYOHY23693MWu">
+<div id="app" hidden data-page-node-id="Ls3QXigCky0FqVuLsWllAH">
 
-  <div class="card bar" data-page-node-id="4O8kpuPvdwup5heg7WOmyD">
-    <label class="sw" data-page-node-id="dUIID8BSIwDzB0BEfnHlsB"><b style="color:var(--ink2)" data-page-node-id="i2uFADIHFaujocoj8SqgUN">品种</b>
-      <select id="prodSel" title="切换查看品种（各品种数据池独立）" data-page-node-id="rk7MNdYKcmoU4bAsulUNEf"></select>
+  <div class="card bar" data-page-node-id="6JYNmblXErBas8MkG6r9Q4">
+    <label class="sw" data-page-node-id="ikxAswO1SpzGV0LaUTapD1"><b style="color:var(--ink2)" data-page-node-id="SpGtGfT1qlLchQ8YG8SV9e">品种</b>
+      <select id="prodSel" title="切换查看品种（各品种数据池独立）" data-page-node-id="rbGmw4QRDW3qKKoTWsFyxG"></select>
     </label>
-    <button id="btnImport" class="pri" data-page-node-id="OmRUjNY2xJjfTazLvOxkOd">导入新数据</button>
-    <select id="impMode" data-page-node-id="A1adwkBtGGA3Lm3CP2Wi9P">
-      <option value="replace" data-page-node-id="9DQwFhl7QPPpQEXFkDCKEq">全量替换数据池</option>
-      <option value="append" data-page-node-id="RTiBZ4qH49bdRJTwkvfF7G">增量追加（自动去重）</option>
+    <button id="btnImport" class="pri" data-page-node-id="SD66iaGufA7Ke1GkV4OTOj">导入新数据</button>
+    <select id="impMode" data-page-node-id="6b0pad142DTwxhGpM8r9Lv">
+      <option value="replace" data-page-node-id="kcPCIBJ2skGy4Yy7xTAHY6">全量替换数据池</option>
+      <option value="append" data-page-node-id="aiRCB10sVZC77SphNPsqos">增量追加（自动去重）</option>
     </select>
-    <label class="sw" data-page-node-id="8gc9UT5h5MlEEggUszn8sE"><input type="checkbox" id="mask" data-page-node-id="8wyfDhPDQEq1CFb3v1SBVh"> 姓名/电话脱敏</label>
-    <label class="sw" data-page-node-id="jOmKcLyaVeijPWsFi27Aa6"><input type="checkbox" id="noNeg" data-page-node-id="YOxW7bYecXXwii4EFdow7G"> 排除退货(负数量)</label>
-    <span class="grow" data-page-node-id="eXeTvWETgh0hQduENFmpoM"></span>
-    <button id="btnBak" data-page-node-id="lkqbbPoAZdmL37wkDdvcCy">导出备份(含数据池)</button>
-    <button id="btnRes" data-page-node-id="FQYQNjbqwoYyJSa1W7OyKw">导入备份</button>
-    <button id="btnCsv" data-page-node-id="WOvFZDK5QHdfnQ8ozu1Hsf">导出 Excel</button>
-    <button id="btnClearPool" data-page-node-id="KB6SDc7LyWtkxBcE2eD1N7">清空数据池</button>
-    <button id="btnReset" data-page-node-id="lOAEe0woPpl3XyYaRrNFd6">清空填写</button>
-    <input type="file" id="bakFile" accept=".json" hidden data-page-node-id="3wBsNW7O40GWEaecusOfEc">
+    <label class="sw" data-page-node-id="B2Q0KhMMd23VNiUAo3sOo3"><input type="checkbox" id="mask" data-page-node-id="NRayknla7ECX6qNSjPAhiC"> 姓名/电话/医生脱敏</label>
+    <label class="sw" data-page-node-id="OHTtSK45Ao2pU7E8Ujnfeb"><input type="checkbox" id="noNeg" data-page-node-id="FWKrKcurVXCCXN0WrFpy5x"> 排除退货(负数量)</label>
+    <span class="grow" data-page-node-id="nE0ZHuwPpbKC0LdPcCrBo2"></span>
+    <button id="btnBak" data-page-node-id="hAQwnBrAG1cbi09kJAH93n">导出备份(含数据池)</button>
+    <button id="btnRes" data-page-node-id="09ZdksAtj6TtFTM8yNPLvr">导入备份</button>
+    <button id="btnCsv" data-page-node-id="jtIpvXQ6wcT1PrBCVect0n">导出 Excel</button>
+    <button id="btnClearPool" data-page-node-id="wYOXGxDwNMlqvTwwsFbWhP">清空数据池</button>
+    <button id="btnReset" data-page-node-id="IyfUeyf4D5j9Vs2f3kA6Fa">清空填写</button>
+    <input type="file" id="bakFile" accept=".json" hidden data-page-node-id="VqRxNVnMessoYt8tIPPhD8">
   </div>
 
-  <div id="tip" hidden data-page-node-id="FoEHqUib03Nv0vz1fPiM8q"></div>
+  <div id="tip" hidden data-page-node-id="sn9pTbpKBAHChSJsKSvVob"></div>
 
-  <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A" data-page-node-id="XzdjOkvB4Kb2YJySEfuDiI"></div>
+  <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A" data-page-node-id="iQtbhuKQ0NksYLWe8SWXbE"></div>
 
   <div id="dStoreBar" hidden style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;
-       background:#FFF;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sd);font-size:13px;color:var(--ink2)" data-page-node-id="HTPpWCCtyGNlz5HKDVBvTO">
-    <span data-page-node-id="u81o6qv0b4VLjdWv1h143o"><b data-page-node-id="0PkF2flDX7WzlEeMQM4o6O">查看药房</b></span>
-    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #EFE6CF;border-radius:6px;background:#FFFDF6;color:var(--ink);min-width:200px;max-width:380px" data-page-node-id="qVb45gWqHGsAOIHpAamJaU"><option value="" data-page-node-id="MeSksG9KrPhJiLXQuG8hJ5">全部药房</option></select>
-    <span id="dStoreCount" style="color:var(--ink3);font-size:11px" data-page-node-id="Srq5OFlqssso5dIghi415x"></span>
-    <span style="flex:1" data-page-node-id="L3vS4kpBgSnuhjWgBX2QrQ"></span>
-    <button id="dStoreClear" hidden style="border:none;background:transparent;color:var(--violet);cursor:pointer;font-size:12px;padding:2px 6px" data-page-node-id="nMPSeWtR4drNnJ5HvjTeVd">清除筛选</button>
+       background:#FFF;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sd);font-size:13px;color:var(--ink2)" data-page-node-id="nMThkwEytr1Nv3CLGJryyd">
+    <span data-page-node-id="fAOZUeAcLVAUxrbSMXz3Z8"><b data-page-node-id="D89clW8xXBuLSWO4pLX1gR">查看药房</b></span>
+    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #EFE6CF;border-radius:6px;background:#FFFDF6;color:var(--ink);min-width:200px;max-width:380px" data-page-node-id="YAsc2g8F8joQAkeft7bkIQ"><option value="" data-page-node-id="eee6qJh1RuwC4BBQXrpiem">全部药房</option></select>
+    <span id="dStoreCount" style="color:var(--ink3);font-size:11px" data-page-node-id="CL9M9LzVqpvCB4KqcJQZYZ"></span>
+    <span style="flex:1" data-page-node-id="K7gZY8F3IOvZuG9vRjaRXG"></span>
+    <button id="dStoreClear" hidden style="border:none;background:transparent;color:var(--violet);cursor:pointer;font-size:12px;padding:2px 6px" data-page-node-id="c0XuWDAJgLOdFakGn31MJd">清除筛选</button>
   </div>
 
-  <div class="nudge" id="nudge" hidden data-page-node-id="DxjdrOe9jDsMdvxV4EmlLt"></div>
+  <div class="nudge" id="nudge" hidden data-page-node-id="pEgvhHWcRhhkHHrBECoaEX"></div>
 
-  <div class="kpis" id="kpis" data-page-node-id="9kPY9iaa0oEQfLDPqYjzWH"></div>
+  <div class="kpis" id="kpis" data-page-node-id="Lu20Xuicwa99C2u2dMpajt"></div>
 
-  <div class="dist" id="dist" data-page-node-id="t8UF27vIkUrCFroBcOEqzY"></div>
+  <div class="dist" id="dist" data-page-node-id="DhwsGagjQOcbbmIOkYTHzM"></div>
 
-  <details id="quality" data-page-node-id="BTpoXUFnDn3ZD0CrEMixMh">
-    <summary data-page-node-id="F1ScvgubFbLnilmdU2bQKa">数据质量与建档异常 <span id="qbadge" data-page-node-id="LCBm9lyqvFhL0VHkG1mCHn"></span></summary>
-    <div class="qbody" id="qbody" data-page-node-id="mkhoqTFv4LKq5a4inv3eQs"></div>
+  <details id="quality" data-page-node-id="RQXDs1Geeaeimsn7bcRGg3">
+    <summary data-page-node-id="t3dBSCKcUVByewBHQDBA4b">数据质量与建档异常 <span id="qbadge" data-page-node-id="oxYgA7x7yyOxrFB9TQ5ks4"></span></summary>
+    <div class="qbody" id="qbody" data-page-node-id="vIFVJ7x9LGAzBttq6hQiT5"></div>
   </details>
 
-  <div class="card" data-page-node-id="DfTS92WfS2YYoFZYS5ZBZx">
-    <div class="tbar" data-page-node-id="MLofxeAjiBqKEyAghYcMui">
-      <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院" data-page-node-id="XOtgLkcAClHZKKkUG1hY4j">
-      <select id="fStatus" data-page-node-id="BBTUoaVccnQC20AlSQsqjR"><option value="" data-page-node-id="M1RaEHDCBY2tQmAMShVNZ2">全部状态</option>
-        <option data-page-node-id="YIY7yzCrGQ3ABA7NQA2iEz">在治</option><option data-page-node-id="FhXD8e3YmgOZfcqDyNN1Gr">断药预警</option><option data-page-node-id="gwob1YcDgmJ3a4kdHl06OE">脱落</option></select>
-      <select id="fStore" data-page-node-id="jIYB0LN5uv1ijRuit5SdP5"><option value="" data-page-node-id="6A1nTFYaUHyDuGFnnboFnC">全部药房</option></select>
-      <select id="fHosp" data-page-node-id="KBmQPU6gJOEe6QXEsMkdu6"><option value="" data-page-node-id="S6nKCGDkVT1DtwjkCRiu9k">全部医院</option></select>
-      <label class="dr" data-page-node-id="uBafBDBfuvXsMGz4hLcxqb">理论下次购药
-        <input type="date" id="fWinFrom" placeholder="起" data-page-node-id="R1uZ57nXrJrXHqDTffHBMo"> ～ <input type="date" id="fWinTo" placeholder="止" data-page-node-id="6BZY0letoToXT2sHOkHv8G">
+  <div class="card" data-page-node-id="igtg66xNY9pdDWGqz7XiMc">
+    <div class="tbar" data-page-node-id="J5iQB0uZcO72yG5UXHDsAm">
+      <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院" data-page-node-id="I52CUBaR058NAAfBLAWDrr">
+      <select id="fStatus" data-page-node-id="0AnF2vewjDiatq0HlHmEFi"><option value="" data-page-node-id="suojpYrO1LBlx6ykoiZT5Q">全部状态</option>
+        <option data-page-node-id="bFydT1RkfaRYoLr5LlDo1g">在治</option><option data-page-node-id="Vz3HRGzoGEpJTiHyaVCNzj">断药预警</option><option data-page-node-id="2y1FKnArEHVO4i68p6i4Gq">脱落</option></select>
+      <select id="fStore" data-page-node-id="X0vuRFlsBlI1gPdQUtfRRO"><option value="" data-page-node-id="OJKg1w103Ezg2X2OpK92VJ">全部药房</option></select>
+      <select id="fHosp" data-page-node-id="npUWQfWryE9Wf54gcjADxE"><option value="" data-page-node-id="lr9ERfiplI6ZFuClBMitfs">全部医院</option></select>
+      <label class="dr" data-page-node-id="OAI85XTZY49kCJ9PguBDbs">理论下次购药
+        <input type="date" id="fWinFrom" placeholder="起" data-page-node-id="93Ookz4J4DHIpG6DDelR2c"> ～ <input type="date" id="fWinTo" placeholder="止" data-page-node-id="yVXhTkpoY6ucUPys3SgpDu">
       </label>
-      <select id="fFill" data-page-node-id="CBNPlC6ZHg06OL0xpnxdJz">
-        <option value="" data-page-node-id="UtABjJuzVYrHWELtYHHj9x">全部填写状态</option>
-        <option value="todo" data-page-node-id="pS1FYbAtMpXp2dGxoStuwn">临床诊断待填</option>
-        <option value="done" data-page-node-id="IeimuXThqykm9t5NPSaeUo">临床诊断已填</option>
-        <option value="note" data-page-node-id="ytsdM8hzl7n4WIBBMtDkyf">已有备注</option>
+      <select id="fFill" data-page-node-id="rtzacg7cZLGtRPqACChT2W">
+        <option value="" data-page-node-id="qQAunOOY6ukgZGBJqeBVPj">全部填写状态</option>
+        <option value="todo" data-page-node-id="0Js2a2UFMYvwEy0RWpmGWi">临床诊断待填</option>
+        <option value="done" data-page-node-id="lsa84PiLTjwtHm8ogddaTl">临床诊断已填</option>
+        <option value="note" data-page-node-id="69czXM9jpEywoaXxBuc9fA">已有备注</option>
       </select>
-      <select id="fNote" title="按备注日期筛选" data-page-node-id="qSBF7NkHFPjj3crsbYSm3s">
-        <option value="" data-page-node-id="v3nHE9LX5WvnPhR20cdXqA">全部备注时间</option>
-        <option value="today" data-page-node-id="Yh911Tkt211LrWLHHhEdLU">今天备注过</option>
-        <option value="7" data-page-node-id="smYqs1dUVwEjuHeeKXH5aC">近 7 天内随访</option>
-        <option value="30" data-page-node-id="FrjzmZBy7A1qK7SxIMkqtf">近一个月内随访（30 天）</option>
-        <option value="90" data-page-node-id="aWY4JlArs0opMqzUqC163e">近 90 天内随访</option>
-        <option value="none" data-page-node-id="jHkJ4JDLIKUvc57F0QkdrV">从未备注</option>
-        <option value="stale90" data-page-node-id="oPJJuAhIc6i7KUM96wLOgT">超过 90 天未随访</option>
+      <select id="fNote" title="按备注日期筛选" data-page-node-id="6dgbTLu2HhaUxAEqk9WNhc">
+        <option value="" data-page-node-id="AwbU3QBDSKAdHTdbnEooRG">全部备注时间</option>
+        <option value="today" data-page-node-id="uvFDBqLVmeOPpza8r2kyCD">今天备注过</option>
+        <option value="7" data-page-node-id="qsvkVXC8PHiATcU8kYQRPV">近 7 天内随访</option>
+        <option value="30" data-page-node-id="B2uLbVZkLC9Zn0BXYSny2N">近一个月内随访（30 天）</option>
+        <option value="90" data-page-node-id="12YKZ7dVokbTauqg9nTHeZ">近 90 天内随访</option>
+        <option value="none" data-page-node-id="DtJ5ZH5pQGCdXJLlVoAYrJ">从未备注</option>
+        <option value="stale90" data-page-node-id="VPFYslyQGUG3FbeqP2cYvO">超过 90 天未随访</option>
       </select>
-      <span class="grow" data-page-node-id="1ZmYV2slrnXjGjLgea4qgq"></span>
-      <span class="sub" id="cnt" data-page-node-id="lBuWlV93JrfUhOkbadNst5"></span>
+      <span class="grow" data-page-node-id="oKWywkMFPwZKMYiMYgP6lI"></span>
+      <span class="sub" id="cnt" data-page-node-id="GzJDYFL18X1DstDHjONEXh"></span>
     </div>
-    <div class="tbox" data-page-node-id="jgtuOph2pUQhe5306kpWdE">
-      <table data-page-node-id="cF2jHLxq02wkEjYXxChvhG">
-        <thead data-page-node-id="yyX3V0bXZpMB3OquIvBXbj"><tr id="thr" data-page-node-id="iML8E2EZaKVBLeHNXRm8IT"></tr></thead>
-        <tbody id="tb" data-page-node-id="IZeGZayCCkbkqF7JGJZjsz"></tbody>
+    <div class="tbox" data-page-node-id="JQgr77lDxgf48bwKoOgxfP">
+      <table data-page-node-id="8ykdiqilIzA7XqCfjLAnH0">
+        <thead data-page-node-id="9DeCRmuvKxyRV1zkqoiR2V"><tr id="thr" data-page-node-id="i3Fe9Hs7ljF2CIecCAFDke"></tr></thead>
+        <tbody id="tb" data-page-node-id="dSowvvPBHkWt0kX79YgyZk"></tbody>
       </table>
     </div>
-    <div class="foot" id="foot" data-page-node-id="LSCv2bUh2Kgcy5Cr0mWuwA"></div>
+    <div class="foot" id="foot" data-page-node-id="WLBKN0vAHKl7tU4hbODCSD"></div>
   </div>
 
 </div>
@@ -1295,7 +1295,7 @@ function renderTable(){
       tdNext(p) +
       '<td><span class="st st-'+p.status+'">'+p.status+'</span></td>' +
       tdDiag(p, m) +
-      td2(p.hospital, p.doctor) +
+      td2(p.hospital, p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : '') +
       td(p.dept) +
       td(p.store) +
       tdEdit(p, 'pay', pay, '') +
@@ -1423,7 +1423,7 @@ function exportExcel(){
       p.ageBest==null?'':p.ageBest,
       mask ? maskPhone(p.phone) : p.phone,
       E.fmtDate(p.firstBuyMs), p.totalQty, E.fmtDate(p.lastBuyMs), p.lastQty,
-      E.fmtDate(p.nextMs), diagVal, p.hospital, p.dept || '', p.doctor,
+      E.fmtDate(p.nextMs), diagVal, p.hospital, p.dept || '', (p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : ''),
       m.pay || p.pay, p.status, m.note, m.noteDate
     ]);
   });
@@ -1613,7 +1613,7 @@ var TIPS = {
   '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置。'],
   '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
-  '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格（.xlsx）。<br>导出字段固定 16 列：患者姓名、年龄、电话、首次购药时间、累计购药数量、最后一次购药时间、最后一次购药数量、理论下次购药日期、临床诊断、末次购药医院、末次科室、处方医生、支付方式、存续状态、备注、备注日期。<br>勾选了左上角「<b>姓名/电话脱敏</b>」时，导出的姓名和电话会同步脱敏。'],
+  '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格（.xlsx）。<br>导出字段固定 16 列：患者姓名、年龄、电话、首次购药时间、累计购药数量、最后一次购药时间、最后一次购药数量、理论下次购药日期、临床诊断、末次购药医院、末次科室、处方医生、支付方式、存续状态、备注、备注日期。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
   '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过<br>默认值自动定：数据池为空时＝全量替换；已有数据时＝增量追加，仍可手动切换。']
