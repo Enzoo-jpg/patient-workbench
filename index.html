@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="zh-CN" data-page-node-id="jlsfQ9pWIkkqhaIH2PzYkF">
+<head data-page-node-id="uoS50MW1y2L6EP0UFI6I62">
+<meta charset="UTF-8" data-page-node-id="LEGwkVNTlXGBORAALngPay">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="bkRgcmPCeglI4LSpNyRfr0">
 <title>销售患者工作台</title>
 <style>
   :root{
@@ -161,12 +161,12 @@
   #tip .t{display:block;font-weight:600;margin-bottom:2px;color:#fff}
 </style>
 </head>
-<body>
-<div class="wrap">
+<body data-page-node-id="rTrBEOECEnFHJJxMF4vjAV">
+<div class="wrap" data-page-node-id="skWSzSfBKtiMyBbvgj94rt">
 
-<header>
-  <h1>销售患者工作台</h1>
-  <span class="sub" id="hsub">刷新式 · 离线运行 · 数据不出本机</span>
+<header data-page-node-id="TCOydRquX5Y9roJExcQNiZ">
+  <h1 data-page-node-id="giIviE1mk8IiCTKmxcq40z">销售患者工作台</h1>
+  <span class="sub" id="hsub" data-page-node-id="FlLc5GASDUGjEoXcHD8G9N">刷新式 · 离线运行 · 数据不出本机</span>
 </header>
 
 <style>
@@ -179,110 +179,112 @@
 #notice #nList b{color:#2B3F66}
 #notice #nList .ni{margin:2px 0}
 </style>
-<div id="notice" hidden>
-  <div class="nbar">
-    <span>📢</span>
-    <span class="ntxt"><b>更新公告 · <span id="nDate"></span></b>　<span id="nSum"></span></span>
-    <button id="nMore" class="nbtn">详情</button>
-    <button id="nClose" class="nbtn" title="不再提示">✕</button>
+<div id="notice" hidden data-page-node-id="RmhvldaUzmGeaRnc7CIsoC">
+  <div class="nbar" data-page-node-id="4V61WkpOSDSQNRAOVdDOFf">
+    <span data-page-node-id="VichMMNbpPtewep4WEXuGK">📢</span>
+    <span class="ntxt" data-page-node-id="D4KXkctPMjKsuqjmRmKwW3"><b data-page-node-id="H4aBLgL7hOacR3b4i60quG">更新公告 · <span id="nDate" data-page-node-id="OnkW8PHhwoZQlyDYVIGLjo"></span></b>　<span id="nSum" data-page-node-id="SgjLuoLkEyhWEeXfo2BveL"></span></span>
+    <button id="nMore" class="nbtn" data-page-node-id="ox5bof8XjAQQHQwaFbUpEv">详情</button>
+    <button id="nClose" class="nbtn" title="不再提示" data-page-node-id="Lu9qCLllhtDbE6owooK7Mv">✕</button>
   </div>
-  <div id="nList" hidden></div>
+  <div id="nList" hidden data-page-node-id="hxbuzkbWFVLzAdqkrDiHSp"></div>
 </div>
 
-<div id="drop">
-  <h2>载入销售数据</h2>
-  <p>把 .xlsx 文件拖到这里，或点击选择</p>
-  <div class="hint">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br>
+<div id="drop" data-page-node-id="3Axj0FUrCr6azpwzepXj1e">
+  <h2 data-page-node-id="N4dIyXY7bTW3wyIIUP1TC0">载入销售数据</h2>
+  <p data-page-node-id="pJmiXUQobTFemNPa62vqnz">把 .xlsx 文件拖到这里，或点击选择</p>
+  <div class="hint" data-page-node-id="sAnJRga9sLwTfETcELtJDX">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br data-page-node-id="kMrUhQHbkIMo3kijKtgUxM">
   患者池与已填写的诊断/备注都保存在本机浏览器，下次打开无需再放文件。</div>
-  <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
+  <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden data-page-node-id="NR3Z3bVI3afgN9GdjSLLDy">
 </div>
 
-<div id="app" hidden>
+<div id="app" hidden data-page-node-id="FUhOHHPW4EMaiEP9FB2CwV">
 
-  <div class="card bar">
-    <label class="sw"><b style="color:var(--ink2)">品种</b>
-      <select id="prodSel" title="切换查看品种（各品种数据池独立）"></select>
+  <div class="card bar" data-page-node-id="lXsxEf5zKTXVnx3JV9wcMt">
+    <label class="sw" data-page-node-id="QFY6EMAEW3aP3jZcmOuNGY"><b style="color:var(--ink2)" data-page-node-id="SwwBsEKfOiDe8bqHnnJw1A">品种</b>
+      <select id="prodSel" title="切换查看品种（各品种数据池独立）" data-page-node-id="oukJOeCh7QohtBgB51hJFN"></select>
     </label>
-    <button id="btnImport" class="pri">导入新数据</button>
-    <select id="impMode">
-      <option value="replace">全量替换数据池</option>
-      <option value="append">增量追加（自动去重）</option>
+    <button id="btnImport" class="pri" data-page-node-id="Ee6ZXXWp0FK25AGfqZMXfS">导入新数据</button>
+    <button id="btnFuv" title="导入随访平台导出的随访任务表（按打码电话+姓氏自动匹配当前品种患者）" data-page-node-id="Hnz2hVa9FBtiFPRZja90OA">导入随访</button>
+    <input type="file" id="fuFile" accept=".xlsx,.xls,.csv" hidden data-page-node-id="C5CTVgMKsOlPBC7NgBF7Ck">
+    <select id="impMode" data-page-node-id="d4vQx2Vuk6cH7ZSwBLEhac">
+      <option value="replace" data-page-node-id="0oJCSw2jcxRC2F1igonkQH">全量替换数据池</option>
+      <option value="append" data-page-node-id="cOwmEAZvKvpgxRHVb31b1o">增量追加（自动去重）</option>
     </select>
-    <label class="sw"><input type="checkbox" id="mask"> 姓名/电话/医生脱敏</label>
-    <label class="sw"><input type="checkbox" id="noNeg"> 排除退货(负数量)</label>
-    <span class="grow"></span>
-    <button id="btnBak">导出备份(含数据池)</button>
-    <button id="btnRes">导入备份</button>
-    <button id="btnCsv">导出 Excel</button>
-    <button id="btnClearPool">清空数据池</button>
-    <button id="btnReset">清空填写</button>
-    <input type="file" id="bakFile" accept=".json" hidden>
+    <label class="sw" data-page-node-id="ACSp7xlaWdM1ob9XwCaF9v"><input type="checkbox" id="mask" data-page-node-id="3QBwRHJNAMAPk8k9GsADZv"> 姓名/电话/医生脱敏</label>
+    <label class="sw" data-page-node-id="Ax8o5vIGYpXXhxQz56Wm4x"><input type="checkbox" id="noNeg" data-page-node-id="d97baYYTH6cSEguU0sScZF"> 排除退货(负数量)</label>
+    <span class="grow" data-page-node-id="u5C3R8Zu6D32ZmRL42eDd6"></span>
+    <button id="btnBak" data-page-node-id="4NIBQsxYpHyRVmHUtPV120">导出备份(含数据池)</button>
+    <button id="btnRes" data-page-node-id="EaGypZDYSWq4BkPD4uT0gC">导入备份</button>
+    <button id="btnCsv" data-page-node-id="m5wIQZeEb3EwhpPnjC4CdA">导出 Excel</button>
+    <button id="btnClearPool" data-page-node-id="LBGQNIlQC1ZhzegQYOvBGf">清空数据池</button>
+    <button id="btnReset" data-page-node-id="pzofuPouAIjJmmuEXtPrtm">清空填写</button>
+    <input type="file" id="bakFile" accept=".json" hidden data-page-node-id="RFrl19ABMbtp91bYG6XkUc">
   </div>
 
-  <div id="tip" hidden></div>
+  <div id="tip" hidden data-page-node-id="GPKNZbrivFaJe2HHAbsIcT"></div>
 
-  <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A"></div>
+  <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A" data-page-node-id="FNHLsZ6NIbEEG0aMNSEUC5"></div>
 
   <div id="dStoreBar" hidden style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;
-       background:#FFF;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sd);font-size:13px;color:var(--ink2)">
-    <span><b>查看药房</b></span>
-    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #EFE6CF;border-radius:6px;background:#FFFDF6;color:var(--ink);min-width:200px;max-width:380px"><option value="">全部药房</option></select>
-    <span id="dStoreCount" style="color:var(--ink3);font-size:11px"></span>
-    <span style="flex:1"></span>
-    <button id="dStoreClear" hidden style="border:none;background:transparent;color:var(--violet);cursor:pointer;font-size:12px;padding:2px 6px">清除筛选</button>
+       background:#FFF;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sd);font-size:13px;color:var(--ink2)" data-page-node-id="OsHvPTmiWUsgDXuFyFhIlX">
+    <span data-page-node-id="nMkXMYEmCL8OKCHsHIs4xs"><b data-page-node-id="fdceJOn1RvVDQ2KjO77Qc5">查看药房</b></span>
+    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #EFE6CF;border-radius:6px;background:#FFFDF6;color:var(--ink);min-width:200px;max-width:380px" data-page-node-id="406xoV0rfswJBCu9XEfHaM"><option value="" data-page-node-id="aMb2S1srtBWxyH8wP7IMWC">全部药房</option></select>
+    <span id="dStoreCount" style="color:var(--ink3);font-size:11px" data-page-node-id="CyyFFcUCpWflVpTXkaHoPL"></span>
+    <span style="flex:1" data-page-node-id="UkE8bTXXyGqCFDN4fwigAc"></span>
+    <button id="dStoreClear" hidden style="border:none;background:transparent;color:var(--violet);cursor:pointer;font-size:12px;padding:2px 6px" data-page-node-id="kZo63PFVq0g1aDqhAjjH7T">清除筛选</button>
   </div>
 
-  <div class="nudge" id="nudge" hidden></div>
+  <div class="nudge" id="nudge" hidden data-page-node-id="zWaxDbftWbc67EdvFPVOBy"></div>
 
-  <div class="kpis" id="kpis"></div>
+  <div class="kpis" id="kpis" data-page-node-id="jvIgMuAENGzNBWlAXqYmLQ"></div>
 
-  <div class="dist" id="dist"></div>
+  <div class="dist" id="dist" data-page-node-id="5ZFzVHWsTOT4TBQePU7yqa"></div>
 
-  <details id="quality">
-    <summary>数据质量与建档异常 <span id="qbadge"></span></summary>
-    <div class="qbody" id="qbody"></div>
+  <details id="quality" data-page-node-id="AEvXic085uin3eZUBvjcdx">
+    <summary data-page-node-id="SG74hwY9dFpows6k1p9qSE">数据质量与建档异常 <span id="qbadge" data-page-node-id="PoTwCQLKW6fJ7TXbfDEHxe"></span></summary>
+    <div class="qbody" id="qbody" data-page-node-id="6Blj4pLSl1qADN7yA3L7iw"></div>
   </details>
 
-  <div class="card">
-    <div class="tbar">
-      <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院（脱敏开启时可用打码搜索）">
-      <select id="fStatus"><option value="">全部状态</option>
-        <option>在治</option><option>断药预警</option><option>脱落</option></select>
-      <select id="fStore"><option value="">全部药房</option></select>
-      <select id="fHosp"><option value="">全部医院</option></select>
-      <label class="dr">理论下次购药
-        <input type="date" id="fWinFrom" placeholder="起"> ～ <input type="date" id="fWinTo" placeholder="止">
+  <div class="card" data-page-node-id="EtKS3t2sHTPc8N6wtFdbIS">
+    <div class="tbar" data-page-node-id="EmYCQKR6zLCYhMWAncJ0xT">
+      <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院（脱敏开启时可用打码搜索）" data-page-node-id="OY4mLgxgBtBIO2UtWziHkv">
+      <select id="fStatus" data-page-node-id="pGqbtFC9nj0u0HwfvjAmOZ"><option value="" data-page-node-id="ctEshKeeYtuDIrljZRihUg">全部状态</option>
+        <option data-page-node-id="5gnMPbcmQeMnGSeYLnjLSL">在治</option><option data-page-node-id="mchgMb7uS9AwcZ1EiFi94t">断药预警</option><option data-page-node-id="C0u0U9M9g0VTauUhtfhFhN">脱落</option></select>
+      <select id="fStore" data-page-node-id="IUqrclhKIPkYgADYgx69hI"><option value="" data-page-node-id="EgvU7mLqTt1RPyBnKApkJf">全部药房</option></select>
+      <select id="fHosp" data-page-node-id="6JBxnRGQh20goiGKdHPB7k"><option value="" data-page-node-id="caCtJeXPkRRxMDIn5dByvD">全部医院</option></select>
+      <label class="dr" data-page-node-id="bmFMIA0rP8BWpE9LAYhg5T">理论下次购药
+        <input type="date" id="fWinFrom" placeholder="起" data-page-node-id="ZzJfGI0bsEvdlQjgLboht6"> ～ <input type="date" id="fWinTo" placeholder="止" data-page-node-id="WGG8mXjibmYck0Z32vNmPY">
       </label>
-      <select id="fFill">
-        <option value="">全部填写状态</option>
-        <option value="todo">临床诊断待填</option>
-        <option value="done">临床诊断已填</option>
-        <option value="note">已有备注</option>
+      <select id="fFill" data-page-node-id="6sZoRDNPlNtG2Xhc5yOuJC">
+        <option value="" data-page-node-id="MhBifBVZMyuRnLC4Boqw9R">全部填写状态</option>
+        <option value="todo" data-page-node-id="Oy3HdtaSbO04Iefy2opHVo">临床诊断待填</option>
+        <option value="done" data-page-node-id="F5SIKMq4d9DFpkJgCbZRMX">临床诊断已填</option>
+        <option value="note" data-page-node-id="dbw59i3c9dPLjCWkYCBV6t">已有备注</option>
       </select>
-      <select id="fNote" title="按备注日期筛选">
-        <option value="">全部备注时间</option>
-        <option value="today">今天备注过</option>
-        <option value="7">近 7 天内随访</option>
-        <option value="30">近一个月内随访（30 天）</option>
-        <option value="90">近 90 天内随访</option>
-        <option value="none">从未备注</option>
-        <option value="stale90">超过 90 天未随访</option>
+      <select id="fNote" title="按备注日期筛选" data-page-node-id="mXj6qjVjI2lrcIyR26vXF0">
+        <option value="" data-page-node-id="6xkCM2UbuJavPG43jEO6O3">全部备注时间</option>
+        <option value="today" data-page-node-id="yuBVYEqCuGlKLqVtLnBoQF">今天备注过</option>
+        <option value="7" data-page-node-id="yuHxnyeHy2zBPPOhkEzuZh">近 7 天内随访</option>
+        <option value="30" data-page-node-id="bUMmNG9DVgUaeLixExRHfI">近一个月内随访（30 天）</option>
+        <option value="90" data-page-node-id="4NaU0rb32jSA3rXVu1TsEy">近 90 天内随访</option>
+        <option value="none" data-page-node-id="jt8QWCFKk7xgOGIDv4qPCL">从未备注</option>
+        <option value="stale90" data-page-node-id="afAqbpqoS2nEOc2E1cE7A4">超过 90 天未随访</option>
       </select>
-      <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
-      <details id="colSetD" class="colset">
-        <summary title="选择要显示的列">列设置 ▾</summary>
-        <div id="colSetBox"></div>
+      <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）" data-page-node-id="3DRBmuqJiSnHB2IoEZhplE">↩ 撤回</button>
+      <details id="colSetD" class="colset" data-page-node-id="zekZc8YGtGEA9xzssYpeCI">
+        <summary title="选择要显示的列" data-page-node-id="tvDYhTqO8yZMGAwpZ7CpsN">列设置 ▾</summary>
+        <div id="colSetBox" data-page-node-id="jiAwmFEqorNI9Fj0CFeD8b"></div>
       </details>
-      <span class="grow"></span>
-      <span class="sub" id="cnt"></span>
+      <span class="grow" data-page-node-id="PtdF5w4IjKwxkg8144i8iN"></span>
+      <span class="sub" id="cnt" data-page-node-id="2cfQi6GCpSD0zkGdBP24CG"></span>
     </div>
-    <div class="tbox">
-      <table>
-        <thead><tr id="thr"></tr></thead>
-        <tbody id="tb"></tbody>
+    <div class="tbox" data-page-node-id="tYVwHxBJ5M4IF7GfH1xTXB">
+      <table data-page-node-id="FMvY1tW2Tx3WDQXGhJHBJ4">
+        <thead data-page-node-id="DZdy4BdfK8HnHAEbNxsBrt"><tr id="thr" data-page-node-id="UtJR61gcRPZN4gfHP970BZ"></tr></thead>
+        <tbody id="tb" data-page-node-id="xzQNFwv90Mr9sN1eyuoWAc"></tbody>
       </table>
     </div>
-    <div class="foot" id="foot"></div>
+    <div class="foot" id="foot" data-page-node-id="mXoFRwF9JziTXQll6Idr0k"></div>
   </div>
 
 </div>
@@ -628,7 +630,7 @@ function beSave(pid){
   BE.saving++; BE.fail = false; updatePoolInfo();
   fetch(BE.base + '/api/save', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pid: pid, pool: PDS[pid].pool, manual: PDS[pid].manual })
+    body: JSON.stringify({ pid: pid, pool: PDS[pid].pool, manual: PDS[pid].manual, fuv: PDS[pid].fuv || null })
   }).then(function(r){
     BE.saving--;
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -639,6 +641,7 @@ function beSave(pid){
     try {
       localStorage.setItem(pidPoolKey(pid), JSON.stringify(PDS[pid].pool));
       localStorage.setItem(pidManualKey(pid), JSON.stringify(PDS[pid].manual));
+      localStorage.setItem(pidFuvKey(pid), JSON.stringify(PDS[pid].fuv || null));
     } catch(e2){}
   });
 }
@@ -666,12 +669,13 @@ function beProbe(cb){
 /* 启动：读各品种池 + 迁移旧单池(v1)到诺倍戈 + 恢复上次品种。
    后端可用时以服务器 data/ 为准；服务器为空且浏览器有数据则自动搬迁上去。 */
 function bootstrapPids(done){
-  PRODUCTS.forEach(function(p){ PDS[p.id] = { pool: [], manual: {} }; });
+  PRODUCTS.forEach(function(p){ PDS[p.id] = { pool: [], manual: {}, fuv: null }; });
 
   function loadFromLocal(){
     PRODUCTS.forEach(function(p){
       try { PDS[p.id].pool   = JSON.parse(localStorage.getItem(pidPoolKey(p.id))   || '[]') || []; } catch(e){ PDS[p.id].pool = []; }
       try { PDS[p.id].manual = JSON.parse(localStorage.getItem(pidManualKey(p.id)) || '{}') || {}; } catch(e){ PDS[p.id].manual = {}; }
+      try { PDS[p.id].fuv    = JSON.parse(localStorage.getItem(pidFuvKey(p.id))    || 'null'); } catch(e){ PDS[p.id].fuv = null; }
     });
     /* 旧版单池 v1 → 归入诺倍戈（仅当诺倍戈还没有 v2 数据且旧池非空） */
     if (!PDS.nuobeige.pool.length){
@@ -948,7 +952,7 @@ function renderColSet(){
     };
   });
   $('#colReset').onclick = function(){
-    COLS.forEach(function(c){ VIS[c.k] = true; });
+    COLS.forEach(function(c){ VIS[c.k] = (c.def !== false); });
     saveCols(); renderColSet(); renderTable();
   };
 }
@@ -1345,6 +1349,124 @@ function renderQuality(){
   if (b) b.onclick = exportMissing;
 }
 
+/* ---------- 随访数据（艾伯维随访平台导出）----------
+   患者级聚合后存 PDS[pid].fuv = { byKey, meta }；
+   匹配键 = 打码电话(134****3881) + 姓氏首字（随访表电话/姓名本就脱敏，底表侧打码后对齐） */
+var FU_HEAD = [
+  ['phone',  '联系电话'],
+  ['name',   '患者'],
+  ['prod',   '产品'],
+  ['type',   '服务摘要'],
+  ['status', '任务状态'],
+  ['exec',   '执行时间'],
+  ['med',    '您是否正常用药'],
+  ['reduce', '您减药的具体原因'],
+  ['stop',   '您停药的具体原因'],
+  ['issue',  '您有关于用药的问题']
+];
+/* 电话归一化：11 位明文 → 打码；已是 134****3881 形式 → 原样归一；其余返回空 */
+function fuNormPhone(v){
+  var d = String(v || '').replace(/\D/g, '');
+  if (d.length === 11) return d.slice(0,3) + '****' + d.slice(-4);
+  if (d.length === 7)  return d.slice(0,3) + '****' + d.slice(-4);
+  return '';
+}
+function fuSurname(s){
+  s = String(s || '').trim().replace(/^[0-9]+/, '');
+  return s ? s[0] : '';
+}
+function fuKey(p){ return fuNormPhone(p.phone) + '|' + fuSurname(p.name); }
+function fuOf(p){
+  var f = PDS[ST.pid] && PDS[ST.pid].fuv;
+  return (f && f.byKey) ? f.byKey[fuKey(p)] : null;
+}
+function fuDateStr(ms){
+  if (!ms) return '';
+  var d = new Date(ms), p = function(x){ return (x < 10 ? '0' : '') + x; };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+}
+function normTs(v){
+  if (v == null || v === '') return 0;
+  if (v instanceof Date) return v.getTime();
+  var s = String(v).trim().replace(/\//g, '-');
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m){ var d = new Date(s); return isNaN(d.getTime()) ? 0 : d.getTime(); }
+  return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0)).getTime();
+}
+function importFollow(file){
+  var pr = curProduct();
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var wb;
+    try { wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true }); }
+    catch(e){ alert('随访文件解析失败：' + e.message); return; }
+    var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    if (!rows.length){ alert('随访文件为空。'); return; }
+    /* 按表头文字映射（列位置变化不影响） */
+    var keys = Object.keys(rows[0]), fmap = {};
+    FU_HEAD.forEach(function(h){
+      for (var i = 0; i < keys.length; i++){
+        if (keys[i].indexOf(h[1]) === 0){ fmap[h[0]] = keys[i]; return; }
+      }
+    });
+    if (!fmap.phone || !fmap.prod){
+      alert('未识别到「联系电话」或「产品」列，请确认这是随访平台导出的任务表。');
+      return;
+    }
+    /* 校验产品归属：随访表的产品必须与当前品种匹配，防止串池 */
+    var prMatch = pr ? pr.match : [];
+    var prodOk = 0, prodSample = '';
+    rows.forEach(function(r){
+      var pv = String(r[fmap.prod] || '');
+      if (!prodSample) prodSample = pv;
+      prMatch.forEach(function(kw){ if (pv.indexOf(kw) >= 0) prodOk++; });
+    });
+    if (!prodOk){
+      alert('随访表中的产品（' + prodSample + '）与当前品种「' + (pr ? pr.label : ST.pid) + '」不匹配，已取消导入。\n请先切换到对应品种再导入。');
+      return;
+    }
+    pushUndo('导入随访数据');
+    var byKey = {};
+    rows.forEach(function(r){
+      var ph = fuNormPhone(r[fmap.phone]);
+      if (!ph) return;
+      var k = ph + '|' + fuSurname(r[fmap.name]);
+      var o = byKey[k];
+      if (!o) o = byKey[k] = { cnt:0, cntFail:0, cntRecall:0, lastMs:0, lastType:'', lastMed:'', lastReduce:'', lastStop:'', lastIssue:'' };
+      o.cnt++;
+      if (fmap.status && String(r[fmap.status] || '') === '执行失败') o.cntFail++;
+      if (fmap.type){
+        var tv = String(r[fmap.type] || '');
+        if (tv.indexOf('召回') >= 0) o.cntRecall++;
+      }
+      var ms = fmap.exec ? normTs(r[fmap.exec]) : 0;
+      if (ms >= o.lastMs){
+        o.lastMs = ms;
+        o.lastType = fmap.type ? String(r[fmap.type] || '') : '';
+        o.lastMed  = fmap.med  ? String(r[fmap.med]  || '') : '';
+      }
+      if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim(); if (v1) o.lastReduce = v1; }
+      if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim(); if (v2) o.lastStop = v2; }
+      if (fmap.issue) { var v3 = String(r[fmap.issue]  || '').trim(); if (v3) o.lastIssue = v3; }
+    });
+    var fuv = { byKey: byKey, meta: {
+      file: file.name, at: new Date().toISOString(),
+      rows: rows.length, patients: Object.keys(byKey).length,
+      matched: 0, pool: ST.pool.length
+    }};
+    ST.pool.forEach(function(p){ if (byKey[fuKey(p)]) fuv.meta.matched++; });
+    PDS[ST.pid].fuv = fuv;
+    persistPid(ST.pid);
+    render();
+    alert('随访数据已导入并匹配：\n'
+      + '文件：' + file.name + '\n'
+      + '任务 ' + rows.length + ' 条 → 患者 ' + fuv.meta.patients + ' 人\n'
+      + '与当前数据池匹配 ' + fuv.meta.matched + ' / ' + ST.pool.length + ' 人\n\n'
+      + '明细表新增 5 列（末次随访 / 随访次数 / 用药状态 / 减停药原因 / 用药问题），默认隐藏，可在「列设置」中打开。');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 /* 单元格渲染分派：按列 key 产出 td（列显隐改造 2026-09-10） */
 function cellOf(k, p, m, pay, st, mask){
   switch(k){
@@ -1362,6 +1484,16 @@ function cellOf(k, p, m, pay, st, mask){
     case 'store':      return td(shortStore(p.store));
     case 'pay':        return tdEdit(p, 'pay', pay, '');
     case 'note':       return tdNote(p, m);
+    /* 随访列 */
+    case 'fuLast':     var f1 = fuOf(p); return td(f1 ? (fuDateStr(f1.lastMs) + ' ' + f1.lastType).trim() : '');
+    case 'fuCnt':      var f2 = fuOf(p);
+                       return td2(f2 ? f2.cnt + ' 次' : '',
+                                  f2 ? ((f2.cntFail ? '失败 ' + f2.cntFail : '') + (f2.cntRecall ? (f2.cntFail ? ' · ' : '') + '召回 ' + f2.cntRecall : '')) : '');
+    case 'fuMed':      var f3 = fuOf(p);
+                       return td(f3 ? (f3.lastStop ? '停药' : (f3.lastReduce ? '减药' : f3.lastMed)) : '');
+    case 'fuReason':   var f4 = fuOf(p);
+                       return td(f4 ? (f4.lastStop ? '停药：' + f4.lastStop : f4.lastReduce) : '');
+    case 'fuIssue':    var f5 = fuOf(p); return td(f5 ? f5.lastIssue : '');
   }
   return '<td></td>';
 }
@@ -1720,6 +1852,7 @@ var TIPS = {
   '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置。'],
   '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
+  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），按<b>打码电话＋姓氏</b>自动匹配当前品种的患者，无需患者编号。<br>导入后明细表新增 5 列（默认隐藏，在「列设置」打开）：末次随访 / 随访次数 / 用药状态 / 减停药原因 / 用药问题。<br>注意：请先在左上角切换到随访表对应的品种（如瑞福）再导入，产品对不上会拒绝导入。'],
   '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格（.xlsx）。<br>导出字段固定 16 列：患者姓名、年龄、电话、首次购药时间、累计购药数量、最后一次购药时间、最后一次购药数量、理论下次购药日期、临床诊断、末次购药医院、末次科室、处方医生、支付方式、存续状态、备注、备注日期。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
@@ -1871,6 +2004,12 @@ window.addEventListener('drop', function(e){
 });
 /* 工具栏"导入新数据"按钮 */
 $('#btnImport').onclick = function(){ $('#file').click(); };
+/* 工具栏"导入随访"按钮 */
+$('#btnFuv').onclick = function(){ $('#fuFile').click(); };
+$('#fuFile').onchange = function(){
+  if (this.files[0]) importFollow(this.files[0]);
+  this.value = '';                                   // 允许重复选同一个文件
+};
 
 $('#mask').onchange = renderTable;
 $('#noNeg').onchange = recompute;
@@ -1956,15 +2095,15 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260910',
+  ver: 'v20260910b',
   date: '2026-09-10',
-  sum: '新增品种「安圣莎」、明细表与导出新增「末次科室」列、一键脱敏覆盖医生姓名',
+  sum: '明细表支持列显隐与紧凑排版、随访数据可导入匹配患者、撤回覆盖字段编辑',
   items: [
-    '🆕 <b>新增第四品种「安圣莎（阿来替尼）」</b>：28 天/盒，诊断列直接显示末次适应症',
-    '📋 <b>患者明细表新增「末次科室」列</b>：取末次购药记录的处方科室；<b>导出 Excel 更新为 16 列</b>（末次科室在「末次购药医院」之后）',
-    '🔒 <b>一键脱敏覆盖医生姓名</b>：勾选后医生保留姓+*（导出同步脱敏）',
-    '💾 <b>支持本地后端存储</b>：数据池可存本机文件，不再受浏览器 5MB 上限（瑞福等大表不丢数据；日常用桌面「患者工作台.bat」打开即连）',
-    '📦 已支持品种：诺倍戈（30天/盒）· 博瑞纳（30天/盒）· 瑞福（28天/盒）· 安圣莎（28天/盒）'
+    '🆕 <b>新增「导入随访」</b>：随访平台导出的任务表按打码电话＋姓氏自动匹配当前品种患者（实测匹配率 99%），明细表新增末次随访/随访次数/用药状态/减停药原因/用药问题 5 列（默认隐藏，列设置中打开）',
+    '📑 <b>患者明细表新增「列设置」</b>：自由显示/隐藏列并记忆选择；表格整体紧凑化，药房名显示去「(连锁）」后缀（导出保留原文）',
+    '↩ <b>撤回范围扩大</b>：修改实际下次购药、诊断、备注等字段编辑也可撤回（最多 5 步，刷新清空）',
+    '🆕 <b>新增第四品种「安圣莎（阿来替尼）」</b>：28 天/盒，诊断列直接显示末次适应症；明细表与导出含「末次科室」列（导出 16 列）',
+    '💾 <b>支持本地后端存储</b>：数据池可存本机文件，不受浏览器 5MB 上限（桌面「患者工作台.bat」打开即连；本次更新后需重启一次后端）'
   ]
 };
 (function(){
