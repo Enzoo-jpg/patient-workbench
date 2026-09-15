@@ -1367,9 +1367,11 @@ var FU_HEAD = [
   ['exec',   ['执行时间']],
   ['med',    ['您是否正常用药', '用药周期状态']],
   ['reduce', ['您减药的具体原因', '未按计划持续用药原因']],
-  ['stop',   ['您停药的具体原因', '脱落/流失原因']],
-  ['issue',  ['您有关于用药的问题', '患者反馈内容']]
+  ['stop',   ['您停药的具体原因', '脱落/流失原因']]
 ];
+/* 「用药问题/反馈」是多列合并：瑞福=问卷；诺倍戈=患者反馈内容+其他+备注（重名列已合并） */
+var FU_ISSUE_CANDS = ['您有关于用药的问题', '患者反馈内容', '其他', '备注'];
+var FU_ISSUE_EXCLUDE = ['其他原因'];   // 「其他原因」是「其他」的前缀但属减停药归因，排除
 /* 电话归一化：11 位明文 → 打码；已是 134****3881 形式 → 原样归一；其余返回空 */
 function fuNormPhone(v){
   var d = String(v || '').replace(/\D/g, '');
@@ -1392,7 +1394,7 @@ function fuVals(p){
   return {
     ms:     f.lastMs,
     last:   fuDateStr(f.lastMs),
-    med:    f.lastStop ? '停药' : (f.lastReduce ? '减药' : f.lastMed),
+    med:    f.lastMed || (f.lastStop ? '停药' : ''),
     reason: f.lastStop ? ('停药：' + f.lastStop) : f.lastReduce,
     issue:  f.lastIssue
   };
@@ -1423,16 +1425,57 @@ function importFollow(file){
     var wb;
     try { wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true }); }
     catch(e){ alert('随访文件解析失败：' + e.message); return; }
-    var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    /* 按数组解析（不用对象模式：导出表存在重名列「备注」，对象模式后列会被前列吞掉），
+       重名列值合并为一个字段（「；」连接） */
+    var grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    if (!grid.length || !grid[0].length){ alert('随访文件为空。'); return; }
+    var hdr = grid[0].map(function(h){ return String(h == null ? '' : h).trim(); });
+    var colMap = {}, headerOrder = [];
+    hdr.forEach(function(h, ci){
+      if (!h) return;
+      if (colMap[h] === undefined){ colMap[h] = []; headerOrder.push(h); }
+      colMap[h].push(ci);
+    });
+    var rows = [];
+    for (var gi = 1; gi < grid.length; gi++){
+      var grow = grid[gi]; if (!grow || !grow.length) continue;
+      var ro = {}, any = false;
+      headerOrder.forEach(function(h){
+        var parts = [];
+        colMap[h].forEach(function(ci){
+          var v = grow[ci];
+          if (v != null && String(v).trim() !== '') parts.push(String(v).trim());
+        });
+        if (parts.length){ ro[h] = parts.join('；'); any = true; } else ro[h] = '';
+      });
+      if (any) rows.push(ro);
+    }
     if (!rows.length){ alert('随访文件为空。'); return; }
-    /* 按表头文字映射（列位置变化不影响；每字段支持多候选表头，兼容不同平台导出） */
-    var keys = Object.keys(rows[0]), fmap = {};
+    /* 按表头文字映射（列位置变化不影响；每字段支持多候选表头，先精确后前缀，
+       避免「其他原因」这类前缀干扰） */
+    var fmap = {};
     FU_HEAD.forEach(function(h){
-      for (var i = 0; i < keys.length; i++){
-        for (var j = 0; j < h[1].length; j++){
-          if (keys[i].indexOf(h[1][j]) === 0){ fmap[h[0]] = keys[i]; return; }
+      for (var pass = 0; pass < 2 && fmap[h[0]] === undefined; pass++){
+        for (var i = 0; i < headerOrder.length; i++){
+          for (var j = 0; j < h[1].length; j++){
+            var c = h[1][j], key = headerOrder[i];
+            if (pass === 0 ? key === c : (key.indexOf(c) === 0 && FU_ISSUE_EXCLUDE.indexOf(key) < 0)){
+              fmap[h[0]] = key; break;
+            }
+          }
+          if (fmap[h[0]] !== undefined) break;
         }
       }
+    });
+    /* 「用药问题/反馈」多列合并：所有命中候选的列（精确优先，排除干扰列） */
+    var issueCols = [];
+    FU_ISSUE_CANDS.forEach(function(c){
+      var hit = headerOrder.filter(function(h){ return h === c; });
+      if (!hit.length) hit = headerOrder.filter(function(h){
+        return h.indexOf(c) === 0 && FU_ISSUE_EXCLUDE.indexOf(h) < 0 &&
+               FU_ISSUE_CANDS.every(function(c2){ return h !== c2; });
+      });
+      hit.forEach(function(h){ if (issueCols.indexOf(h) < 0) issueCols.push(h); });
     });
     if (!fmap.phone || !fmap.prod){
       alert('未识别到「联系电话」或「产品」列，请确认这是随访平台导出的任务表。');
@@ -1473,7 +1516,10 @@ function importFollow(file){
       }
       if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1) o.lastReduce = v1; }
       if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2) o.lastStop = v2; }
-      if (fmap.issue) { var v3 = String(r[fmap.issue]  || '').trim(); if (v3) o.lastIssue = v3; }
+      if (issueCols.length){
+        var v3 = issueCols.map(function(h){ return String(r[h] || '').trim(); }).filter(Boolean).join('；');
+        if (v3) o.lastIssue = v3;
+      }
     });
     var fuv = { byKey: byKey, meta: {
       file: file.name, at: new Date().toISOString(),
