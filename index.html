@@ -1500,7 +1500,7 @@ function importFollow(file){
       if (!ph) return;
       var k = ph + '|' + fuSurname(r[fmap.name]);
       var o = byKey[k];
-      if (!o) o = byKey[k] = { cnt:0, cntFail:0, cntRecall:0, lastMs:0, lastType:'', lastMed:'', lastReduce:'', lastStop:'', lastIssue:'' };
+      if (!o) o = byKey[k] = { cnt:0, cntFail:0, cntRecall:0, lastMs:0, lastType:'', lastMed:'', lastReduce:'', lastStop:'', lastIssue:'', reduceMs:0, stopMs:0, issueMs:0 };
       o.cnt++;
       var stv = fmap.status ? String(r[fmap.status] || '') : '';
       if (stv === '执行失败' || stv === '忽略') o.cntFail++;   // 「忽略」= 平台上未执行成功的任务
@@ -1514,11 +1514,13 @@ function importFollow(file){
         o.lastType = fmap.type ? String(r[fmap.type] || '') : '';
         o.lastMed  = fmap.med  ? String(r[fmap.med]  || '') : '';
       }
-      if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1) o.lastReduce = v1; }
-      if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2) o.lastStop = v2; }
+      /* 减药/停药/反馈：在各自非空的行里取「执行时间最新」的一条
+         （随访文件行序不保证按时间排，不能按文件行序取最后一条） */
+      if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1 && ms >= o.reduceMs){ o.reduceMs = ms; o.lastReduce = v1; } }
+      if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2 && ms >= o.stopMs){ o.stopMs = ms; o.lastStop = v2; } }
       if (issueCols.length){
         var v3 = issueCols.map(function(h){ return String(r[h] || '').trim(); }).filter(Boolean).join('；');
-        if (v3) o.lastIssue = v3;
+        if (v3 && ms >= o.issueMs){ o.issueMs = ms; o.lastIssue = v3; }
       }
     });
     var fuv = { byKey: byKey, meta: {
