@@ -1739,17 +1739,19 @@ function exportExcel(){
       p.ageBest==null?'':p.ageBest,
       mask ? maskPhone(p.phone) : p.phone,
       E.fmtDate(p.firstBuyMs), p.totalQty, E.fmtDate(p.lastBuyMs), p.lastQty,
-      E.fmtDate(p.nextMs), diagVal, p.hospital, p.dept || '', (p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : ''),
+      p.nextMs ? excelSerial(p.nextMs) : '', diagVal, p.hospital, p.dept || '', (p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : ''),
       m.pay || p.pay, effStatus(p), m.note, m.noteDate,
       fv && fv.ms ? excelSerial(fv.ms) : '', fv ? fv.med : '', fv ? fv.reason : '', fv ? fv.issue : ''
     ]);
   });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  /* 末次随访列（第 17 列，索引 16）：数值日期格式化，Excel 可直接筛选/排序 */
-  for (var R = 1; R < aoa.length; R++){
-    var dc = ws[XLSX.utils.encode_cell({ r: R, c: 16 })];
-    if (dc && dc.t === 'n' && dc.v !== '') dc.z = 'yyyy-mm-dd';
-  }
+  /* 日期列数值化（Excel 可直接筛选/排序）：第 8 列理论下次购药日期、第 17 列末次随访 */
+  [7, 16].forEach(function(ci){
+    for (var R = 1; R < aoa.length; R++){
+      var dc = ws[XLSX.utils.encode_cell({ r: R, c: ci })];
+      if (dc && dc.t === 'n' && dc.v !== '') dc.z = 'yyyy-mm-dd';
+    }
+  });
   ws['!cols'] = [12,6,15,12,13,13,14,14,11,22,10,10,22,10,30,11,14,10,18,20].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '随访表');
