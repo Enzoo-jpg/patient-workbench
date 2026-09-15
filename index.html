@@ -1369,9 +1369,17 @@ var FU_HEAD = [
   ['reduce', ['您减药的具体原因', '未按计划持续用药原因']],
   ['stop',   ['您停药的具体原因', '脱落/流失原因']]
 ];
-/* 「用药问题/反馈」是多列合并：瑞福=问卷；诺倍戈=患者反馈内容+其他+备注（重名列已合并） */
-var FU_ISSUE_CANDS = ['您有关于用药的问题', '患者反馈内容', '其他', '备注'];
-var FU_ISSUE_EXCLUDE = ['其他原因'];   // 「其他原因」是「其他」的前缀但属减停药归因，排除
+/* 「用药问题/反馈」是多列合并：瑞福小表=问卷；瑞福/诺倍戈历史任务大表=患者反馈内容/患者问题反馈/其他/备注（重名列已合并） */
+var FU_ISSUE_CANDS = ['您有关于用药的问题', '患者反馈内容', '患者问题反馈', '其他', '备注'];
+var FU_ISSUE_EXCLUDE = ['其他原因', '其他药品使用情况'];   // 前缀被「其他」误命中的用药问卷列，排除
+/* 反馈噪音值清洗：占位符号与「无」类回答视为空 */
+function fuCleanIssue(v){
+  v = String(v || '').trim();
+  if (!v) return '';
+  if (/^[-—–－。，、.,·/\s]+$/.test(v)) return '';
+  if (/^(无|暂无|没有|正常|不详|无异常|无不适|未接通|无人接听|挂电话|挂断|未接|电话未接|未接，需要再次随访|拒访|拒接)([。.！!～~\s]*)$/.test(v)) return '';
+  return v;
+}
 /* 电话归一化：11 位明文 → 打码；已是 134****3881 形式 → 原样归一；其余返回空 */
 function fuNormPhone(v){
   var d = String(v || '').replace(/\D/g, '');
@@ -1519,7 +1527,7 @@ function importFollow(file){
       if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1 && ms >= o.reduceMs){ o.reduceMs = ms; o.lastReduce = v1; } }
       if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2 && ms >= o.stopMs){ o.stopMs = ms; o.lastStop = v2; } }
       if (issueCols.length){
-        var v3 = issueCols.map(function(h){ return String(r[h] || '').trim(); }).filter(Boolean).join('；');
+        var v3 = issueCols.map(function(h){ return fuCleanIssue(r[h]); }).filter(Boolean).join('；');
         if (v3 && ms >= o.issueMs){ o.issueMs = ms; o.lastIssue = v3; }
       }
     });
