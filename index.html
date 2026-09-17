@@ -251,7 +251,7 @@
     </label>
     <button id="btnProdMgr" title="查看/编辑品种档案：改名、改每盒天数、改识别词、删除动态品种">品种管理</button>
     <button id="btnImport" class="pri">导入新数据</button>
-    <button id="btnFuv" title="导入随访平台导出的随访任务表（按打码电话+姓氏自动匹配当前品种患者）">导入随访</button>
+    <button id="btnFuv" title="导入随访平台导出的任务表：按品种自动分拣到各数据池并匹配患者（打码电话+姓氏），一次导入更新全部品种">导入随访</button>
     <input type="file" id="fuFile" accept=".xlsx,.xls,.csv" hidden>
     <select id="impMode">
       <option value="replace">全量替换数据池</option>
@@ -1633,7 +1633,6 @@ function normTs(v){
   return new Date(+m[1], +m[2]-1, +m[3], +(m[4]||0), +(m[5]||0), +(m[6]||0)).getTime();
 }
 function importFollow(file){
-  var pr = curProduct();
   var reader = new FileReader();
   reader.onload = function(ev){
     var wb;
@@ -1695,66 +1694,76 @@ function importFollow(file){
       alert('未识别到「联系电话」或「产品」列，请确认这是随访平台导出的任务表。');
       return;
     }
-    /* 校验产品归属 + 行级过滤：随访表可能是混品种导出（如博瑞纳+希必可），
-       只保留命中当前品种的任务行，防止其他品种污染聚合 */
-    var prMatch = pr ? pr.match : [];
-    var kept = [], prodSample = '', skippedOther = 0;
+    /* 按品种自动分拣（与销售导入同思路）：任务行按各品种识别词分组，
+       逐品种聚合匹配并写入各自数据池的 fuv；未建档品种的任务行跳过并提示 */
+    var batches = {}, noPoolCnt = 0, noPoolSample = {}, prodSample = '';
     rows.forEach(function(r){
       var pv = String(r[fmap.prod] || '');
       if (!prodSample) prodSample = pv;
-      var hit = false;
-      prMatch.forEach(function(kw){ if (pv.indexOf(kw) >= 0) hit = true; });
-      if (hit) kept.push(r); else skippedOther++;
+      var target = null;
+      var L = allProducts();
+      for (var i = 0; i < L.length && !target; i++){
+        var m = L[i].match;
+        for (var j = 0; j < m.length; j++) if (pv.indexOf(m[j]) >= 0){ target = L[i].id; break; }
+      }
+      if (target) (batches[target] || (batches[target] = [])).push(r);
+      else { noPoolCnt++; noPoolSample[pv || '(空白)'] = 1; }
     });
-    if (!kept.length){
-      alert('随访表中的产品（' + prodSample + '）与当前品种「' + (pr ? pr.label : ST.pid) + '」不匹配，已取消导入。\n请先切换到对应品种再导入。');
+    var pids = Object.keys(batches);
+    if (!pids.length){
+      alert('随访表中的产品（' + (Object.keys(noPoolSample).join('、') || prodSample) + '）没有对应的数据池品种，未导入。\n请先在导入销售底表时建档该品种，再来导入随访。');
       return;
     }
-    rows = kept;
     pushUndo('导入随访数据');
-    var byKey = {};
-    rows.forEach(function(r){
-      var ph = fuNormPhone(r[fmap.phone]);
-      if (!ph) return;
-      var k = ph + '|' + fuSurname(r[fmap.name]);
-      var o = byKey[k];
-      if (!o) o = byKey[k] = { cnt:0, cntFail:0, cntRecall:0, lastMs:0, lastType:'', lastMed:'', lastReduce:'', lastStop:'', lastIssue:'', reduceMs:0, stopMs:0, issueMs:0 };
-      o.cnt++;
-      var stv = fmap.status ? String(r[fmap.status] || '') : '';
-      if (stv === '执行失败' || stv === '忽略') o.cntFail++;   // 「忽略」= 平台上未执行成功的任务
-      if (fmap.type){
-        var tv = String(r[fmap.type] || '');
-        if (tv.indexOf('召回') >= 0) o.cntRecall++;
-      }
-      var ms = fmap.exec ? normTs(r[fmap.exec]) : 0;
-      if (ms >= o.lastMs){
-        o.lastMs = ms;
-        o.lastType = fmap.type ? String(r[fmap.type] || '') : '';
-        o.lastMed  = fmap.med  ? String(r[fmap.med]  || '') : '';
-      }
-      /* 减药/停药/反馈：在各自非空的行里取「执行时间最新」的一条
-         （随访文件行序不保证按时间排，不能按文件行序取最后一条） */
-      if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1 && ms >= o.reduceMs){ o.reduceMs = ms; o.lastReduce = v1; } }
-      if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2 && ms >= o.stopMs){ o.stopMs = ms; o.lastStop = v2; } }
-      if (issueCols.length){
-        var v3 = issueCols.map(function(h){ return fuCleanIssue(r[h]); }).filter(Boolean).join('；');
-        if (v3 && ms >= o.issueMs){ o.issueMs = ms; o.lastIssue = v3; }
-      }
+    var msgParts = [];
+    pids.forEach(function(pid){
+      var brows = batches[pid];
+      var byKey = {};
+      brows.forEach(function(r){
+        var ph = fuNormPhone(r[fmap.phone]);
+        if (!ph) return;
+        var k = ph + '|' + fuSurname(r[fmap.name]);
+        var o = byKey[k];
+        if (!o) o = byKey[k] = { cnt:0, cntFail:0, cntRecall:0, lastMs:0, lastType:'', lastMed:'', lastReduce:'', lastStop:'', lastIssue:'', reduceMs:0, stopMs:0, issueMs:0 };
+        o.cnt++;
+        var stv = fmap.status ? String(r[fmap.status] || '') : '';
+        if (stv === '执行失败' || stv === '忽略') o.cntFail++;   // 「忽略」= 平台上未执行成功的任务
+        if (fmap.type){
+          var tv = String(r[fmap.type] || '');
+          if (tv.indexOf('召回') >= 0) o.cntRecall++;
+        }
+        var ms = fmap.exec ? normTs(r[fmap.exec]) : 0;
+        if (ms >= o.lastMs){
+          o.lastMs = ms;
+          o.lastType = fmap.type ? String(r[fmap.type] || '') : '';
+          o.lastMed  = fmap.med  ? String(r[fmap.med]  || '') : '';
+        }
+        /* 减药/停药/反馈：在各自非空的行里取「执行时间最新」的一条
+           （随访文件行序不保证按时间排，不能按文件行序取最后一条） */
+        if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1 && ms >= o.reduceMs){ o.reduceMs = ms; o.lastReduce = v1; } }
+        if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2 && ms >= o.stopMs){ o.stopMs = ms; o.lastStop = v2; } }
+        if (issueCols.length){
+          var v3 = issueCols.map(function(h){ return fuCleanIssue(r[h]); }).filter(Boolean).join('；');
+          if (v3 && ms >= o.issueMs){ o.issueMs = ms; o.lastIssue = v3; }
+        }
+      });
+      var poolArr = PDS[pid] ? PDS[pid].pool : [];
+      var fuv = { byKey: byKey, meta: {
+        file: file.name, at: new Date().toISOString(),
+        rows: brows.length, patients: Object.keys(byKey).length,
+        matched: 0, pool: poolArr.length
+      }};
+      poolArr.forEach(function(pp){ if (byKey[fuKey(pp)]) fuv.meta.matched++; });
+      PDS[pid].fuv = fuv;
+      persistPid(pid);
+      var lp = productOf(pid);
+      msgParts.push('· ' + (lp ? lp.label : pid) + '：任务 ' + brows.length + ' 条 → 患者 ' + fuv.meta.patients + ' 人，匹配 ' + fuv.meta.matched + ' / ' + poolArr.length + ' 人');
     });
-    var fuv = { byKey: byKey, meta: {
-      file: file.name, at: new Date().toISOString(),
-      rows: rows.length, patients: Object.keys(byKey).length,
-      matched: 0, pool: ST.pool.length
-    }};
-    ST.pool.forEach(function(p){ if (byKey[fuKey(p)]) fuv.meta.matched++; });
-    PDS[ST.pid].fuv = fuv;
-    persistPid(ST.pid);
     render();
-    alert('随访数据已导入并匹配：\n'
-      + '文件：' + file.name + '\n'
-      + '任务 ' + rows.length + ' 条' + (skippedOther ? '（另有 ' + skippedOther + ' 条其他品种任务已跳过）' : '') + ' → 患者 ' + fuv.meta.patients + ' 人\n'
-      + '与当前数据池匹配 ' + fuv.meta.matched + ' / ' + ST.pool.length + ' 人\n\n'
-      + '明细表新增 4 列（末次随访 / 用药状态 / 减停药原因 / 用药问题），默认隐藏，可在「列设置」中打开；导出 Excel 同步追加这 4 列。');
+    var msg = '随访数据已按品种自动分拣导入：\n文件：' + file.name + '\n\n' + msgParts.join('\n');
+    if (noPoolCnt) msg += '\n\n另有 ' + noPoolCnt + ' 条任务属未建档品种（' + Object.keys(noPoolSample).slice(0, 3).join('、') + '），已跳过';
+    msg += '\n\n随访 4 列（末次随访 / 用药状态 / 减停药原因 / 用药问题）默认隐藏，可在「列设置」中打开；导出 Excel 同步追加这 4 列。';
+    alert(msg);
   };
   reader.readAsArrayBuffer(file);
 }
@@ -2159,7 +2168,7 @@ var TIPS = {
   '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置。'],
   '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
-  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），按<b>打码电话＋姓氏</b>自动匹配当前品种的患者，无需患者编号。<br>已兼容两种导出格式：<b>瑞福</b>（艾伯维三方随访平台）与<b>诺倍戈</b>（105 列历史任务导出），表头自动识别。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：请先在左上角切换到随访表对应的品种（如瑞福/诺倍戈）再导入，产品对不上会拒绝导入。'],
+  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
   '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格（.xlsx）。<br>导出字段固定 20 列：患者姓名、年龄、电话、首次购药时间、累计购药数量、最后一次购药时间、最后一次购药数量、理论下次购药日期、临床诊断、末次购药医院、末次科室、处方医生、支付方式、存续状态、备注、备注日期、末次随访、用药状态、减停药原因、用药问题（末尾 4 列在导入随访数据后才有值）。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
@@ -2403,13 +2412,14 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260917',
+  ver: 'v20260917b',
   date: '2026-09-17',
-  sum: '新品种半自动建档：导入混品种底表时弹窗确认建池，每盒天数手填，品种下拉自动扩展',
+  sum: '随访导入也支持按品种自动分拣：一次导入混品种任务表，各品种池自动匹配',
   items: [
     '🧬 <b>新品种半自动建档</b>：导入底表遇到未建档品种不再跳过，弹窗预填显示名/识别词，确认后自动建池入库；每盒天数手动填写（默认 30）',
     '🗂 <b>新增「品种管理」</b>：动态品种可改名 / 改每盒天数 / 改识别词 / 删除（内置四品种只读）；改周期后全池自动重算',
-    '🧪 <b>博瑞纳随访表已兼容</b>：混品种随访导出按品种行级过滤，反馈内容自动剥「不良反应：」前缀'
+    '📥 <b>随访导入按品种自动分拣</b>：混品种任务表一次导入，各品种池分别聚合匹配（无需切换品种重复导入）；未建档品种任务自动跳过并注明',
+    '🐛 <b>修复弹窗常驻显示问题</b>：弹窗此前会空壳常驻且关闭无效（样式覆盖 hidden 属性）'
   ]
 };
 (function(){
