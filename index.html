@@ -1354,7 +1354,7 @@ function renderQuality(){
   if (b) b.onclick = exportMissing;
 }
 
-/* ---------- 随访数据（随访平台导出，兼容瑞福/诺倍戈两种表格式）----------
+/* ---------- 随访数据（随访平台导出，兼容瑞福两种表/诺倍戈/博瑞纳历史任务格式；混品种导出按品种行级过滤）----------
    患者级聚合后存 PDS[pid].fuv = { byKey, meta }；
    匹配键 = 打码电话(134****3881) + 姓氏首字（底表侧打码后对齐；
    实测：随访平台的患者编号/oneId 与销售底表 ID 是两套体系，均无法直接匹配） */
@@ -1375,6 +1375,8 @@ var FU_ISSUE_EXCLUDE = ['其他原因', '其他药品使用情况'];   // 前缀
 /* 反馈噪音值清洗：占位符号与「无」类回答视为空 */
 function fuCleanIssue(v){
   v = String(v || '').trim();
+  if (/^不良反应[:：]/.test(v)) v = v.replace(/^不良反应[:：]\s*/, '').trim();   // 平台反馈前缀标签，剥掉只留内容
+  v = v.replace(/^[,，、;；.。:：\s]+/, '').trim();   // 前缀剥离后残留的首标点一并清掉
   if (!v) return '';
   if (/^[-—–－。，、.,·/\s]+$/.test(v)) return '';
   if (/^(无|暂无|没有|正常|不详|无异常|无不适|未接通|无人接听|挂电话|挂断|未接|电话未接|未接，需要再次随访|拒访|拒接)([。.！!～~\s]*)$/.test(v)) return '';
@@ -1489,18 +1491,22 @@ function importFollow(file){
       alert('未识别到「联系电话」或「产品」列，请确认这是随访平台导出的任务表。');
       return;
     }
-    /* 校验产品归属：随访表的产品必须与当前品种匹配，防止串池 */
+    /* 校验产品归属 + 行级过滤：随访表可能是混品种导出（如博瑞纳+希必可），
+       只保留命中当前品种的任务行，防止其他品种污染聚合 */
     var prMatch = pr ? pr.match : [];
-    var prodOk = 0, prodSample = '';
+    var kept = [], prodSample = '', skippedOther = 0;
     rows.forEach(function(r){
       var pv = String(r[fmap.prod] || '');
       if (!prodSample) prodSample = pv;
-      prMatch.forEach(function(kw){ if (pv.indexOf(kw) >= 0) prodOk++; });
+      var hit = false;
+      prMatch.forEach(function(kw){ if (pv.indexOf(kw) >= 0) hit = true; });
+      if (hit) kept.push(r); else skippedOther++;
     });
-    if (!prodOk){
+    if (!kept.length){
       alert('随访表中的产品（' + prodSample + '）与当前品种「' + (pr ? pr.label : ST.pid) + '」不匹配，已取消导入。\n请先切换到对应品种再导入。');
       return;
     }
+    rows = kept;
     pushUndo('导入随访数据');
     var byKey = {};
     rows.forEach(function(r){
@@ -1542,7 +1548,7 @@ function importFollow(file){
     render();
     alert('随访数据已导入并匹配：\n'
       + '文件：' + file.name + '\n'
-      + '任务 ' + rows.length + ' 条 → 患者 ' + fuv.meta.patients + ' 人\n'
+      + '任务 ' + rows.length + ' 条' + (skippedOther ? '（另有 ' + skippedOther + ' 条其他品种任务已跳过）' : '') + ' → 患者 ' + fuv.meta.patients + ' 人\n'
       + '与当前数据池匹配 ' + fuv.meta.matched + ' / ' + ST.pool.length + ' 人\n\n'
       + '明细表新增 4 列（末次随访 / 用药状态 / 减停药原因 / 用药问题），默认隐藏，可在「列设置」中打开；导出 Excel 同步追加这 4 列。');
   };
