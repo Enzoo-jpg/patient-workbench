@@ -181,10 +181,26 @@
 /* ---------- 品种半自动建档 + 品种管理 弹窗 ---------- */
 .ovl{position:fixed;inset:0;background:rgba(59,53,80,.35);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
 .ovl[hidden]{display:none !important}   /* 关键：作者层 display:flex 会压过 hidden 属性的 UA 默认值，必须显式压制 */
-/* 下拉搜索框（品种/药房/医院选项多时按关键字过滤） */
-.selSearch{width:96px;border:1px solid var(--line);border-radius:8px;padding:4px 7px;font-size:12px;color:var(--ink);background:#fff}
-.selSearch:focus{outline:none;border-color:var(--violet)}
-.selSearch::placeholder{color:var(--ink3)}
+/* 可搜索下拉：原生 select 升级为自定义面板（点开顶部带搜索框），select 本体保留为数据源与事件源 */
+.ssel{position:relative;display:inline-block}
+.ssel-native{display:none !important}
+.ssel-btn{display:inline-flex;align-items:center;gap:6px;font:inherit;color:var(--ink);
+  background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer}
+.ssel-btn:hover{border-color:var(--violet)}
+.ssel-btn .ar{font-size:10px;color:var(--ink2)}
+.ssel-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:55;width:230px;
+  background:var(--card);border:1px solid var(--line);border-radius:9px;padding:6px;
+  box-shadow:0 8px 24px rgba(59,53,80,.14)}
+.ssel-panel input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;
+  padding:5px 8px;font-size:13px;color:var(--ink);background:#fff;margin-bottom:4px}
+.ssel-panel input:focus{outline:none;border-color:var(--violet)}
+.ssel-panel input::placeholder{color:var(--ink3)}
+.ssel-list{max-height:220px;overflow:auto}
+.ssel-item{padding:6px 8px;border-radius:6px;font-size:13px;color:var(--ink);cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ssel-item:hover{background:#F3EFFB}
+.ssel-item.on{color:var(--violet);font-weight:600}
+.ssel-empty{padding:8px;font-size:12px;color:var(--ink2);text-align:center}
 .mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px 18px;box-shadow:0 8px 30px rgba(59,53,80,.18)}
 .mcard h3{margin:0 0 4px;font-size:15px;color:var(--ink)}
 .mcard .msub{font-size:12px;color:var(--ink2);margin-bottom:12px}
@@ -250,10 +266,9 @@
 <div id="app" hidden>
 
   <div class="card bar">
-    <label class="sw"><b style="color:var(--ink2)">品种</b>
-      <input type="text" class="selSearch" data-sel="prodSel" placeholder="🔍 搜品种" title="输入关键字过滤品种列表">
+    <div class="sw"><b style="color:var(--ink2)">品种</b>
       <select id="prodSel" title="切换查看品种（各品种数据池独立）"></select>
-    </label>
+    </div>
     <button id="btnProdMgr" title="查看/编辑品种档案：改名、改每盒天数、改识别词、删除动态品种">品种管理</button>
     <button id="btnImport" class="pri">导入新数据</button>
     <button id="btnFuv" title="导入随访平台导出的任务表：按品种自动分拣到各数据池并匹配患者（打码电话+姓氏），一次导入更新全部品种">导入随访</button>
@@ -302,9 +317,7 @@
       <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院（脱敏开启时可用打码搜索）">
       <select id="fStatus"><option value="">全部状态</option>
         <option>在治</option><option>断药预警</option><option>脱落</option></select>
-      <input type="text" class="selSearch" data-sel="fStore" placeholder="🔍 搜药房" title="输入关键字过滤药房列表">
       <select id="fStore"><option value="">全部药房</option></select>
-      <input type="text" class="selSearch" data-sel="fHosp" placeholder="🔍 搜医院" title="输入关键字过滤医院列表">
       <select id="fHosp"><option value="">全部医院</option></select>
       <label class="dr">理论下次购药
         <input type="date" id="fWinFrom" placeholder="起"> ～ <input type="date" id="fWinTo" placeholder="止">
@@ -812,7 +825,7 @@ function fillProdSel(){
   sel.innerHTML = allProducts().map(function(p){
     return '<option value="' + p.id + '"' + (p.id === ST.pid ? ' selected' : '') + '>' + esc(p.label) + '</option>';
   }).join('');
-  if (SEL_FILTER['prodSel'] !== undefined) applySelFilter('prodSel');   // 重建选项后恢复搜索过滤状态
+  syncSsel(sel);   // 可搜索下拉按钮文字随选项重建同步
 }
 function onSwitchProduct(){
   switchProduct($('#prodSel').value);
@@ -1490,6 +1503,7 @@ function drill(what){
     $('#fStatus').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
     $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#dStore').value = '';
     $('#q').value = '';
+    syncAllSsel();   // 可搜索下拉按钮文字同步
     render(); renderTable();
     return;
   }
@@ -2129,6 +2143,7 @@ function applyLoaded(name, parsed){
   /* 切换文件时重置筛选，避免沿用旧选项 */
   $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = ''; $('#dStore').value = '';
   $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
+  syncAllSsel();   // 可搜索下拉按钮文字同步
   $('#drop').hidden = true;
   $('#app').hidden = false;
   applyImport();
@@ -2168,39 +2183,73 @@ function opt(sel, arr){
   var ph = selEl.options && selEl.options[0] ? selEl.options[0].text : '全部';
   selEl.innerHTML = '<option value="">' + ph + '</option>' +
     arr.map(function(v){ return '<option>'+esc(v)+'</option>'; }).join('');
-  if (SEL_FILTER[selEl.id] !== undefined) applySelFilter(selEl.id);   // 重建选项后恢复搜索过滤状态
+  syncSsel(selEl);   // 可搜索下拉按钮文字随选项重建同步
 }
 
-/* ---------- 下拉搜索：品种/药房/医院选项多时按关键字过滤 ----------
-   输入即过滤（「全部」与已选中项常驻），开始输入时自动展开下拉；Esc 清空恢复 */
-var SEL_FILTER = {};
-function applySelFilter(id){
-  var sel = $('#' + id); if (!sel) return;
-  var kw = (SEL_FILTER[id] || '').toLowerCase();
-  var cur = sel.value;
-  Array.prototype.forEach.call(sel.options, function(op){
-    if (op.value === '' || op.value === cur){ op.hidden = false; return; }   // 「全部」(空值)与当前选中项常驻
-    op.hidden = !!kw && op.text.toLowerCase().indexOf(kw) < 0;
-  });
+/* ---------- 可搜索下拉：点开筛选顶部即有搜索框 ----------
+   原生 select 保留为数据源与事件源（display:none 隐藏），自定义面板负责展示/搜索/选择；
+   点选项 → 写回 select.value 并派发 change，既有联动逻辑（recompute/render/品种切换）原样生效 */
+function enhanceSelSearchable(sel){
+  if (!sel || sel.__ssel) return;
+  sel.__ssel = true;
+  var wrap = document.createElement('div');
+  wrap.className = 'ssel';
+  sel.parentNode.insertBefore(wrap, sel);
+  var btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'ssel-btn';
+  var panel = document.createElement('div');
+  panel.className = 'ssel-panel'; panel.hidden = true;
+  var inp = document.createElement('input');
+  inp.type = 'text'; inp.placeholder = '🔍 输入关键字筛选…';
+  var list = document.createElement('div');
+  list.className = 'ssel-list';
+  panel.appendChild(inp); panel.appendChild(list);
+  wrap.appendChild(btn); wrap.appendChild(panel); wrap.appendChild(sel);
+  sel.classList.add('ssel-native');
+
+  function syncBtn(){
+    var o = sel.options[sel.selectedIndex];
+    btn.innerHTML = esc(o && o.text ? o.text : '全部') + ' <span class="ar">▾</span>';
+  }
+  function renderList(){
+    var kw = inp.value.trim().toLowerCase();
+    list.innerHTML = '';
+    var n = 0;
+    Array.prototype.forEach.call(sel.options, function(op){
+      if (kw && op.text.toLowerCase().indexOf(kw) < 0) return;   // 纯按匹配过滤（选中项靠 .on 高亮标识，无需常驻）
+      n++;
+      var it = document.createElement('div');
+      it.className = 'ssel-item' + (op.value === sel.value ? ' on' : '');
+      it.textContent = op.text;
+      it.onclick = function(){
+        sel.value = op.value;
+        syncBtn(); close();
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      list.appendChild(it);
+    });
+    if (!n){
+      var e = document.createElement('div');
+      e.className = 'ssel-empty'; e.textContent = '无匹配项';
+      list.appendChild(e);
+    }
+  }
+  function open(){ panel.hidden = false; inp.value = ''; renderList(); try { inp.focus(); } catch(e){} }
+  function close(){ panel.hidden = true; }
+  btn.onclick = function(ev){ ev.stopPropagation(); panel.hidden ? open() : close(); };
+  /* 关键：拦截组件内部 click 冒泡——prodSel 位于 <label> 内，选项点击冒泡到 label 会触发
+     label 的激活转发（合成点击内部第一个可激活控件=按钮），导致面板关闭后立刻又被打开 */
+  wrap.addEventListener('click', function(ev){ ev.stopPropagation(); });
+  inp.oninput = renderList;
+  inp.onkeydown = function(ev){ if (ev.key === 'Escape'){ close(); btn.focus(); } };
+  document.addEventListener('click', function(ev){ if (!wrap.contains(ev.target)) close(); });
+  sel.addEventListener('change', syncBtn);          // 用户/程序派发 change 时同步按钮
+  sel.__syncSsel = syncBtn;                          // 程序直接改 value（不派发 change）时手动调
+  syncBtn();
 }
-(function(){
-  Array.prototype.forEach.call(document.querySelectorAll('.selSearch'), function(inp){
-    var id = inp.getAttribute('data-sel');
-    SEL_FILTER[id] = '';
-    inp.addEventListener('input', function(){
-      SEL_FILTER[id] = inp.value.trim();
-      var sel = $('#' + id);
-      if (!sel) return;
-      applySelFilter(id);
-      if (SEL_FILTER[id] && sel.showPicker){ try { sel.showPicker(); } catch(e){} }
-    });
-    inp.addEventListener('keydown', function(ev){
-      if (ev.key === 'Escape'){
-        inp.value = ''; SEL_FILTER[id] = ''; applySelFilter(id);
-      }
-    });
-  });
-})();
+function syncSsel(sel){ if (sel && sel.__syncSsel) sel.__syncSsel(); }
+function syncAllSsel(){ ['#prodSel','#fStore','#fHosp'].forEach(function(s){ syncSsel($(s)); }); }
+['#prodSel','#fStore','#fHosp'].forEach(function(s){ enhanceSelSearchable($(s)); });
 
 function handleFile(file){
   var fr = new FileReader();
@@ -2390,6 +2439,7 @@ $('#q').oninput = renderTable;
 /* 看板药房切换器是主控件：同时驱动 KPI 与明细表 */
 $('#dStore').onchange = function(){
   $('#fStore').value = this.value;     // 同步到明细表的 fStore（fStore 自身改动会反向同步回来）
+  syncSsel($('#fStore'));              // 可搜索下拉按钮文字同步
   render();
 };
 $('#fStore').onchange = function(){
@@ -2398,6 +2448,7 @@ $('#fStore').onchange = function(){
 };
 $('#dStoreClear').onclick = function(){
   $('#dStore').value = ''; $('#fStore').value = '';
+  syncAllSsel();                       // 可搜索下拉按钮文字同步
   render();
 };
 $('#btnCsv').onclick = exportExcel;
@@ -2468,13 +2519,14 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260917b',
+  ver: 'v20260917c',
   date: '2026-09-17',
-  sum: '随访导入也支持按品种自动分拣：一次导入混品种任务表，各品种池自动匹配',
+  sum: '筛选下拉内置搜索：点开品种/药房/医院下拉，顶部输入关键字即时定位',
   items: [
     '🧬 <b>新品种半自动建档</b>：导入底表遇到未建档品种不再跳过，弹窗预填显示名/识别词，确认后自动建池入库；每盒天数手动填写（默认 30）',
     '🗂 <b>新增「品种管理」</b>：动态品种可改名 / 改每盒天数 / 改识别词 / 删除（内置四品种只读）；改周期后全池自动重算',
     '📥 <b>随访导入按品种自动分拣</b>：混品种任务表一次导入，各品种池分别聚合匹配（无需切换品种重复导入）；未建档品种任务自动跳过并注明',
+    '🔍 <b>筛选下拉内置搜索</b>：品种 / 药房 / 医院下拉点开后顶部带搜索框，选项多时输入关键字即时定位；选中项高亮，点外部自动收起',
     '🐛 <b>修复弹窗常驻显示问题</b>：弹窗此前会空壳常驻且关闭无效（样式覆盖 hidden 属性）'
   ]
 };
