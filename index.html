@@ -1194,12 +1194,13 @@ function colLetter(i){
   return s;
 }
 /* 两段式读取：先只解工作簿元信息拿表名(很快)，再只解析选中的那一张表。
-   底表文件常带一张几千行的公式汇总表，全量解析会白花一倍时间。 */
-function readWorkbook(buf){
-  return XLSX.read(buf, {type:'array', bookSheets:true});
+   底表文件常带一张几千行的公式汇总表，全量解析会白花一倍时间。
+   cp: 936 = 老格式(Excel 2.x/BIFF2-5)无码页信息时按 GBK 解码中文（ERP 假编码导出常见） */
+function readWorkbook(buf, cp){
+  return XLSX.read(buf, {type:'array', bookSheets:true, codepage: cp});
 }
-function readSheet(buf, name){
-  return XLSX.read(buf, {type:'array', cellDates:false, cellStyles:false, sheets:[name]});
+function readSheet(buf, name, cp){
+  return XLSX.read(buf, {type:'array', cellDates:false, cellStyles:false, sheets:[name], codepage: cp});
 }
 function sheetToRows(ws){
   var aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, blankrows:true});
@@ -1635,65 +1636,75 @@ function normTs(v){
 function importFollow(file){
   var reader = new FileReader();
   reader.onload = function(ev){
-    var wb;
-    try { wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true }); }
-    catch(e){ alert('随访文件解析失败：' + e.message); return; }
     /* 按数组解析（不用对象模式：导出表存在重名列「备注」，对象模式后列会被前列吞掉），
        重名列值合并为一个字段（「；」连接） */
-    var grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
-    if (!grid.length || !grid[0].length){ alert('随访文件为空。'); return; }
-    var hdr = grid[0].map(function(h){ return String(h == null ? '' : h).trim(); });
-    var colMap = {}, headerOrder = [];
-    hdr.forEach(function(h, ci){
-      if (!h) return;
-      if (colMap[h] === undefined){ colMap[h] = []; headerOrder.push(h); }
-      colMap[h].push(ci);
-    });
-    var rows = [];
-    for (var gi = 1; gi < grid.length; gi++){
-      var grow = grid[gi]; if (!grow || !grow.length) continue;
-      var ro = {}, any = false;
-      headerOrder.forEach(function(h){
-        var parts = [];
-        colMap[h].forEach(function(ci){
-          var v = grow[ci];
-          if (v != null && String(v).trim() !== '') parts.push(String(v).trim());
+    function parseAll(cp){
+      var wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true, codepage: cp });
+      var grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+      var hdr = grid.length ? grid[0].map(function(h){ return String(h == null ? '' : h).trim(); }) : [];
+      var colMap = {}, headerOrder = [];
+      hdr.forEach(function(h, ci){
+        if (!h) return;
+        if (colMap[h] === undefined){ colMap[h] = []; headerOrder.push(h); }
+        colMap[h].push(ci);
+      });
+      var rows = [];
+      for (var gi = 1; gi < grid.length; gi++){
+        var grow = grid[gi]; if (!grow || !grow.length) continue;
+        var ro = {}, any = false;
+        headerOrder.forEach(function(h){
+          var parts = [];
+          colMap[h].forEach(function(ci){
+            var v = grow[ci];
+            if (v != null && String(v).trim() !== '') parts.push(String(v).trim());
+          });
+          if (parts.length){ ro[h] = parts.join('；'); any = true; } else ro[h] = '';
         });
-        if (parts.length){ ro[h] = parts.join('；'); any = true; } else ro[h] = '';
-      });
-      if (any) rows.push(ro);
-    }
-    if (!rows.length){ alert('随访文件为空。'); return; }
-    /* 按表头文字映射（列位置变化不影响；每字段支持多候选表头，先精确后前缀，
-       避免「其他原因」这类前缀干扰） */
-    var fmap = {};
-    FU_HEAD.forEach(function(h){
-      for (var pass = 0; pass < 2 && fmap[h[0]] === undefined; pass++){
-        for (var i = 0; i < headerOrder.length; i++){
-          for (var j = 0; j < h[1].length; j++){
-            var c = h[1][j], key = headerOrder[i];
-            if (pass === 0 ? key === c : (key.indexOf(c) === 0 && FU_ISSUE_EXCLUDE.indexOf(key) < 0)){
-              fmap[h[0]] = key; break;
-            }
-          }
-          if (fmap[h[0]] !== undefined) break;
-        }
+        if (any) rows.push(ro);
       }
-    });
-    /* 「用药问题/反馈」多列合并：所有命中候选的列（精确优先，排除干扰列） */
-    var issueCols = [];
-    FU_ISSUE_CANDS.forEach(function(c){
-      var hit = headerOrder.filter(function(h){ return h === c; });
-      if (!hit.length) hit = headerOrder.filter(function(h){
-        return h.indexOf(c) === 0 && FU_ISSUE_EXCLUDE.indexOf(h) < 0 &&
-               FU_ISSUE_CANDS.every(function(c2){ return h !== c2; });
+      /* 按表头文字映射（列位置变化不影响；每字段支持多候选表头，先精确后前缀，
+         避免「其他原因」这类前缀干扰） */
+      var fmap = {};
+      FU_HEAD.forEach(function(h){
+        for (var pass = 0; pass < 2 && fmap[h[0]] === undefined; pass++){
+          for (var i = 0; i < headerOrder.length; i++){
+            for (var j = 0; j < h[1].length; j++){
+              var c = h[1][j], key = headerOrder[i];
+              if (pass === 0 ? key === c : (key.indexOf(c) === 0 && FU_ISSUE_EXCLUDE.indexOf(key) < 0)){
+                fmap[h[0]] = key; break;
+              }
+            }
+            if (fmap[h[0]] !== undefined) break;
+          }
+        }
       });
-      hit.forEach(function(h){ if (issueCols.indexOf(h) < 0) issueCols.push(h); });
-    });
-    if (!fmap.phone || !fmap.prod){
+      /* 「用药问题/反馈」多列合并：所有命中候选的列（精确优先，排除干扰列） */
+      var issueCols = [];
+      FU_ISSUE_CANDS.forEach(function(c){
+        var hit = headerOrder.filter(function(h){ return h === c; });
+        if (!hit.length) hit = headerOrder.filter(function(h){
+          return h.indexOf(c) === 0 && FU_ISSUE_EXCLUDE.indexOf(h) < 0 &&
+                 FU_ISSUE_CANDS.every(function(c2){ return h !== c2; });
+        });
+        hit.forEach(function(h){ if (issueCols.indexOf(h) < 0) issueCols.push(h); });
+      });
+      return { grid: grid, rows: rows, fmap: fmap, issueCols: issueCols };
+    }
+    var P;
+    try { P = parseAll(); }
+    catch(e){ alert('随访文件解析失败：' + e.message); return; }
+    /* 老格式(Excel 2.x/BIFF2-5)无码页信息时中文会解码成乱码 → 表头匹配不上；
+       未命中必需列就按 GBK 码页自动重试一遍 */
+    if (!P.fmap.phone || !P.fmap.prod){
+      try { P = parseAll(936); } catch(e2){}
+    }
+    if (!P.grid.length || !P.grid[0].length){ alert('随访文件为空。'); return; }
+    if (!P.rows.length){ alert('随访文件为空。'); return; }
+    if (!P.fmap.phone || !P.fmap.prod){
       alert('未识别到「联系电话」或「产品」列，请确认这是随访平台导出的任务表。');
       return;
     }
+    var grid = P.grid, rows = P.rows, fmap = P.fmap, issueCols = P.issueCols;
     /* 按品种自动分拣（与销售导入同思路）：任务行按各品种识别词分组，
        逐品种聚合匹配并写入各自数据池的 fuv；未建档品种的任务行跳过并提示 */
     var batches = {}, noPoolCnt = 0, noPoolSample = {}, prodSample = '';
@@ -2071,7 +2082,7 @@ function refreshHeader(){
 }
 /* 自动挑底表：按候选顺序逐张试，取第一张"必需列齐全"的工作表。
    比让人手工选更稳——表被改名、顺序变了都不会选错。 */
-function loadSheetNames(meta){
+function loadSheetNames(meta, cpRetry){
   var names = meta.SheetNames;
   ST.sheetNames = names;
   var prefer = names.filter(function(x){ return /底表|明细|销售/i.test(x); });
@@ -2082,15 +2093,20 @@ function loadSheetNames(meta){
   });
   var order = prefer.concat(rest);
   for (var i = 0; i < order.length; i++){
-    var wb = readSheet(ST.buf, order[i]);
+    var wb = readSheet(ST.buf, order[i], cpRetry ? 936 : undefined);
     var parsed = sheetToRows(wb.Sheets[order[i]]);
     if (missingHeaders(parsed.header).length === 0){
       applyLoaded(order[i], parsed);
       return;
     }
   }
-  /* 没有一张符合底表格式：载入第一张并报错 */
-  var wb0 = readSheet(ST.buf, order[0]);
+  /* 没有一张符合底表格式：先按 GBK 码页重试一遍（老格式 Excel/ERP 导出中文被解码成乱码，
+     表头匹配不上是典型症状），仍失败才报错 */
+  if (!cpRetry){
+    try { loadSheetNames(readWorkbook(ST.buf, 936), true); return; } catch(e){}
+  }
+  /* 载入第一张并报错 */
+  var wb0 = readSheet(ST.buf, order[0], cpRetry ? 936 : undefined);
   applyLoaded(order[0], sheetToRows(wb0.Sheets[order[0]]));
   ST.importMsg = '这个文件里没有找到符合底表格式的工作表（缺少销售时间/销售数量/会员电话/开票抬头列），' +
     '请确认打开的是销售底表文件。';
