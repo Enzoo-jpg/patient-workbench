@@ -181,6 +181,10 @@
 /* ---------- 品种半自动建档 + 品种管理 弹窗 ---------- */
 .ovl{position:fixed;inset:0;background:rgba(59,53,80,.35);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
 .ovl[hidden]{display:none !important}   /* 关键：作者层 display:flex 会压过 hidden 属性的 UA 默认值，必须显式压制 */
+/* 下拉搜索框（品种/药房/医院选项多时按关键字过滤） */
+.selSearch{width:96px;border:1px solid var(--line);border-radius:8px;padding:4px 7px;font-size:12px;color:var(--ink);background:#fff}
+.selSearch:focus{outline:none;border-color:var(--violet)}
+.selSearch::placeholder{color:var(--ink3)}
 .mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px 18px;box-shadow:0 8px 30px rgba(59,53,80,.18)}
 .mcard h3{margin:0 0 4px;font-size:15px;color:var(--ink)}
 .mcard .msub{font-size:12px;color:var(--ink2);margin-bottom:12px}
@@ -247,6 +251,7 @@
 
   <div class="card bar">
     <label class="sw"><b style="color:var(--ink2)">品种</b>
+      <input type="text" class="selSearch" data-sel="prodSel" placeholder="🔍 搜品种" title="输入关键字过滤品种列表">
       <select id="prodSel" title="切换查看品种（各品种数据池独立）"></select>
     </label>
     <button id="btnProdMgr" title="查看/编辑品种档案：改名、改每盒天数、改识别词、删除动态品种">品种管理</button>
@@ -297,7 +302,9 @@
       <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院（脱敏开启时可用打码搜索）">
       <select id="fStatus"><option value="">全部状态</option>
         <option>在治</option><option>断药预警</option><option>脱落</option></select>
+      <input type="text" class="selSearch" data-sel="fStore" placeholder="🔍 搜药房" title="输入关键字过滤药房列表">
       <select id="fStore"><option value="">全部药房</option></select>
+      <input type="text" class="selSearch" data-sel="fHosp" placeholder="🔍 搜医院" title="输入关键字过滤医院列表">
       <select id="fHosp"><option value="">全部医院</option></select>
       <label class="dr">理论下次购药
         <input type="date" id="fWinFrom" placeholder="起"> ～ <input type="date" id="fWinTo" placeholder="止">
@@ -805,6 +812,7 @@ function fillProdSel(){
   sel.innerHTML = allProducts().map(function(p){
     return '<option value="' + p.id + '"' + (p.id === ST.pid ? ' selected' : '') + '>' + esc(p.label) + '</option>';
   }).join('');
+  if (SEL_FILTER['prodSel'] !== undefined) applySelFilter('prodSel');   // 重建选项后恢复搜索过滤状态
 }
 function onSwitchProduct(){
   switchProduct($('#prodSel').value);
@@ -2160,7 +2168,39 @@ function opt(sel, arr){
   var ph = selEl.options && selEl.options[0] ? selEl.options[0].text : '全部';
   selEl.innerHTML = '<option value="">' + ph + '</option>' +
     arr.map(function(v){ return '<option>'+esc(v)+'</option>'; }).join('');
+  if (SEL_FILTER[selEl.id] !== undefined) applySelFilter(selEl.id);   // 重建选项后恢复搜索过滤状态
 }
+
+/* ---------- 下拉搜索：品种/药房/医院选项多时按关键字过滤 ----------
+   输入即过滤（「全部」与已选中项常驻），开始输入时自动展开下拉；Esc 清空恢复 */
+var SEL_FILTER = {};
+function applySelFilter(id){
+  var sel = $('#' + id); if (!sel) return;
+  var kw = (SEL_FILTER[id] || '').toLowerCase();
+  var cur = sel.value;
+  Array.prototype.forEach.call(sel.options, function(op){
+    if (op.value === '' || op.value === cur){ op.hidden = false; return; }   // 「全部」(空值)与当前选中项常驻
+    op.hidden = !!kw && op.text.toLowerCase().indexOf(kw) < 0;
+  });
+}
+(function(){
+  Array.prototype.forEach.call(document.querySelectorAll('.selSearch'), function(inp){
+    var id = inp.getAttribute('data-sel');
+    SEL_FILTER[id] = '';
+    inp.addEventListener('input', function(){
+      SEL_FILTER[id] = inp.value.trim();
+      var sel = $('#' + id);
+      if (!sel) return;
+      applySelFilter(id);
+      if (SEL_FILTER[id] && sel.showPicker){ try { sel.showPicker(); } catch(e){} }
+    });
+    inp.addEventListener('keydown', function(ev){
+      if (ev.key === 'Escape'){
+        inp.value = ''; SEL_FILTER[id] = ''; applySelFilter(id);
+      }
+    });
+  });
+})();
 
 function handleFile(file){
   var fr = new FileReader();
