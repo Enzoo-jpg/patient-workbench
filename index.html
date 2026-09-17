@@ -178,6 +178,25 @@
 #notice #nList{border-top:1px dashed #C7D7F0;padding:8px 14px 10px;line-height:1.9}
 #notice #nList b{color:#2B3F66}
 #notice #nList .ni{margin:2px 0}
+/* ---------- 品种半自动建档 + 品种管理 弹窗 ---------- */
+.ovl{position:fixed;inset:0;background:rgba(59,53,80,.35);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px 18px;box-shadow:0 8px 30px rgba(59,53,80,.18)}
+.mcard h3{margin:0 0 4px;font-size:15px;color:var(--ink)}
+.mcard .msub{font-size:12px;color:var(--ink2);margin-bottom:12px}
+.pcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#FCFBFE}
+.pcard .ptitle{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.pcard .prow{display:flex;align-items:center;gap:6px;margin:5px 0;font-size:12px;color:var(--ink2)}
+.pcard .prow b{width:58px;flex:none;font-weight:600}
+.pcard input[type=text],.pcard input[type=number]{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;color:var(--ink);background:#fff}
+.pcard .hint{font-size:11px;color:var(--ink3);margin-left:58px}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.mfoot button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer}
+.mfoot button.pri{background:var(--violet);border-color:var(--violet);color:#fff}
+.mrow{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:12.5px;color:var(--ink2)}
+.mrow b{width:64px;flex:none;font-weight:600;color:var(--ink)}
+.mrow input[type=text],.mrow input[type=number]{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12.5px;color:var(--ink);background:#fff}
+.mrow .ro{color:var(--ink3)}
+.mrow .del{border:none;background:var(--rose-l);color:var(--rose);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;flex:none}
 </style>
 <div id="notice" hidden>
   <div class="nbar">
@@ -197,12 +216,39 @@
   <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
 
+<!-- 新品种半自动建档弹窗 -->
+<div id="pnOvl" class="ovl" hidden>
+  <div class="mcard">
+    <h3>发现未建档品种</h3>
+    <div class="msub">确认后将自动建池入库并出现在品种下拉中；不勾选的品种本次仍跳过。每盒天数请按该品种官方周期填写（后续可在「品种管理」修改）。</div>
+    <div id="pnList"></div>
+    <div class="mfoot">
+      <button id="pnSkip">暂不建档</button>
+      <button id="pnOk" class="pri">建档并导入勾选品种</button>
+    </div>
+  </div>
+</div>
+
+<!-- 品种管理弹窗 -->
+<div id="pmOvl" class="ovl" hidden>
+  <div class="mcard">
+    <h3>品种管理</h3>
+    <div class="msub">内置品种（前四个）只读；动态建档品种可修改显示名 / 每盒天数 / 识别词（逗号分隔），也可删除整个数据池。改每盒天数后该品种存续状态会全池重算。</div>
+    <div id="pmList"></div>
+    <div class="mfoot">
+      <button id="pmClose">关闭</button>
+      <button id="pmSave" class="pri">保存修改</button>
+    </div>
+  </div>
+</div>
+
 <div id="app" hidden>
 
   <div class="card bar">
     <label class="sw"><b style="color:var(--ink2)">品种</b>
       <select id="prodSel" title="切换查看品种（各品种数据池独立）"></select>
     </label>
+    <button id="btnProdMgr" title="查看/编辑品种档案：改名、改每盒天数、改识别词、删除动态品种">品种管理</button>
     <button id="btnImport" class="pri">导入新数据</button>
     <button id="btnFuv" title="导入随访平台导出的随访任务表（按打码电话+姓氏自动匹配当前品种患者）">导入随访</button>
     <input type="file" id="fuFile" accept=".xlsx,.xls,.csv" hidden>
@@ -611,14 +657,44 @@ var PDS = {};                       // pid -> { pool:[], manual:{} } 各品种�
 
 function pidPoolKey(pid){   return 'patient_workbench_pool_v2_' + pid; }
 function pidManualKey(pid){ return 'patient_workbench_manual_v2_' + pid; }
-function productOf(pid){ for (var i=0;i<PRODUCTS.length;i++) if (PRODUCTS[i].id === pid) return PRODUCTS[i]; return null; }
+function pidFuvKey(pid){    return 'patient_workbench_fuv_v2_' + pid; }
+function productOf(pid){ var L = allProducts(); for (var i=0;i<L.length;i++) if (L[i].id === pid) return L[i]; return null; }
+/* ---------- 动态品种（半自动建档）：localStorage 持久化，与内置品种并列生效 ----------
+   导入时遇到未建档品种 → 弹窗预填识别词/默认周期，确认后建池入库；品种下拉自动多出新选项。
+   「品种管理」可改名/改周期/改识别词/删池（仅动态品种；内置四品种只读）。 */
+var DYN_KEY = 'patient_workbench_products_dyn_v1';
+var DYN = [];
+(function(){
+  try { DYN = JSON.parse(localStorage.getItem(DYN_KEY) || '[]') || []; } catch(e){ DYN = []; }
+  DYN = DYN.filter(function(p){ return p && p.id && p.label && p.match && p.match.length; });
+})();
+function saveDyn(){
+  try { localStorage.setItem(DYN_KEY, JSON.stringify(DYN)); } catch(e){ alert('品种档案保存失败：' + e.message); }
+}
+function allProducts(){ return PRODUCTS.concat(DYN); }
+/* 从商品名称提取识别词：括号内外各取一段（如「希必可(阿布昔替尼片)」→ 希必可/阿布昔替尼片），剔除剂量杂质段 */
+function kwFromName(n){
+  var s = String(n || '').trim();
+  if (!s) return [];
+  var parts = s.split(/[（(）)\s]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+  var kws = [];
+  parts.forEach(function(x){
+    if (x.length < 2) return;
+    if (/^[\d./*×xXmgG粒片盒支瓶IU万-]+$/.test(x)) return;   // 纯剂量/规格段不要
+    if (kws.indexOf(x) < 0) kws.push(x);
+  });
+  if (!kws.length) kws.push(s);
+  return kws;
+}
+function dynId(){ return 'dyn_' + Date.now().toString(36) + Math.floor(Math.random()*1e4).toString(36); }
 /* 识别一行属于哪个品种（读商品名称列）；不认识返回 null */
 function classifyRow(r){
   var pn = String(r.prodName || r.invoiceName || '').trim();   // 取商品名（语义字段优先）
   if (!pn) return null;
-  for (var i=0;i<PRODUCTS.length;i++){
-    var m = PRODUCTS[i].match;
-    for (var j=0;j<m.length;j++) if (pn.indexOf(m[j]) >= 0) return PRODUCTS[i];
+  var L = allProducts();
+  for (var i=0;i<L.length;i++){
+    var m = L[i].match;
+    for (var j=0;j<m.length;j++) if (pn.indexOf(m[j]) >= 0) return L[i];
   }
   return null;
 }
@@ -650,6 +726,7 @@ function persistPid(pid){
   try {
     localStorage.setItem(pidPoolKey(pid), JSON.stringify(PDS[pid].pool));
     localStorage.setItem(pidManualKey(pid), JSON.stringify(PDS[pid].manual));
+    localStorage.setItem(pidFuvKey(pid), JSON.stringify(PDS[pid].fuv || null));
   } catch(e){ alert('品种「'+pid+'」数据保存失败（可能超出浏览器存储上限），请先用「导出备份」留存：' + e.message); }
 }
 /* 探测后端：1.2s 内无响应视为不可用 */
@@ -669,10 +746,10 @@ function beProbe(cb){
 /* 启动：读各品种池 + 迁移旧单池(v1)到诺倍戈 + 恢复上次品种。
    后端可用时以服务器 data/ 为准；服务器为空且浏览器有数据则自动搬迁上去。 */
 function bootstrapPids(done){
-  PRODUCTS.forEach(function(p){ PDS[p.id] = { pool: [], manual: {}, fuv: null }; });
+  allProducts().forEach(function(p){ PDS[p.id] = { pool: [], manual: {}, fuv: null }; });
 
   function loadFromLocal(){
-    PRODUCTS.forEach(function(p){
+    allProducts().forEach(function(p){
       try { PDS[p.id].pool   = JSON.parse(localStorage.getItem(pidPoolKey(p.id))   || '[]') || []; } catch(e){ PDS[p.id].pool = []; }
       try { PDS[p.id].manual = JSON.parse(localStorage.getItem(pidManualKey(p.id)) || '{}') || {}; } catch(e){ PDS[p.id].manual = {}; }
       try { PDS[p.id].fuv    = JSON.parse(localStorage.getItem(pidFuvKey(p.id))    || 'null'); } catch(e){ PDS[p.id].fuv = null; }
@@ -689,7 +766,8 @@ function bootstrapPids(done){
     var saved = null;
     try { saved = localStorage.getItem(PID_STORAGE_KEY); } catch(e){}
     var pid = 'nuobeige';
-    for (var i=0;i<PRODUCTS.length;i++) if (PRODUCTS[i].id === saved) pid = saved;
+    var Lp = allProducts();
+    for (var i=0;i<Lp.length;i++) if (Lp[i].id === saved) pid = saved;
     switchProduct(pid);
     if (done) done();
   }
@@ -707,11 +785,12 @@ function bootstrapPids(done){
           if (st[pid].pool && st[pid].pool.length) hasRemote = true;
           PDS[pid].pool   = st[pid].pool   || [];
           PDS[pid].manual = st[pid].manual || {};
+          PDS[pid].fuv    = st[pid].fuv    || null;   // 随访数据一并恢复（此前漏了，刷新后随访需重导）
         });
         if (!hasRemote){
           /* 服务器还是空的：把浏览器现有数据一次性搬到后端 */
           loadFromLocal();
-          PRODUCTS.forEach(function(p){ if (PDS[p.id].pool.length) beSave(p.id); });
+          allProducts().forEach(function(p){ if (PDS[p.id].pool.length) beSave(p.id); });
         }
         finish();
       })
@@ -722,8 +801,8 @@ function bootstrapPids(done){
 function fillProdSel(){
   var sel = $('#prodSel');
   if (!sel) return;
-  sel.innerHTML = PRODUCTS.map(function(p){
-    return '<option value="' + p.id + '"' + (p.id === ST.pid ? ' selected' : '') + '>' + p.label + '</option>';
+  sel.innerHTML = allProducts().map(function(p){
+    return '<option value="' + p.id + '"' + (p.id === ST.pid ? ' selected' : '') + '>' + esc(p.label) + '</option>';
   }).join('');
 }
 function onSwitchProduct(){
@@ -822,14 +901,19 @@ function applyImport(){
   if (!pr) { ST.importMsg = '未定义品种，无法导入。'; return; }
   pushUndo('导入数据');
 
-  /* 1) 按品种分拣：有商品名称列则逐行识别；无该列则整表按当前品种导入（无法判断只能当当前品种） */
-  var batches = {}, skip = 0, noProdCol = !(ST.fmap && ST.fmap.prodName !== undefined);
+  /* 1) 按品种分拣：有商品名称列则逐行识别；无该列则整表按当前品种导入（无法判断只能当当前品种）
+     未建档品种不再直接丢弃：按商品名称分组收集，导入完成后弹窗半自动建档 */
+  var batches = {}, unknown = {}, noProdCol = !(ST.fmap && ST.fmap.prodName !== undefined);
   if (noProdCol){
     batches[ST.pid] = rows;
   } else {
     rows.forEach(function(r){
       var p = classifyRow(r);
-      if (!p) { skip++; return; }
+      if (!p) {
+        var nm = String(r.prodName || r.invoiceName || '').trim() || '(空白商品名)';
+        (unknown[nm] || (unknown[nm] = [])).push(r);
+        return;
+      }
       (batches[p.id] || (batches[p.id] = [])).push(r);
     });
   }
@@ -875,7 +959,9 @@ function applyImport(){
   });
   ST.importMsg = '已按品种分拣导入：' + (parts.join('，') || '(无已建档品种)');
   if (noProdCol) ST.importMsg = '表中未找到「商品名称」列，全部 ' + rows.length + ' 行已按当前品种导入：' + (productOf(ST.pid) ? productOf(ST.pid).label : ST.pid);
-  if (skip) ST.importMsg += '。另有 ' + skip + ' 行属未建档品种（已跳过，需要时再建档案）';
+  var unknownCnt = 0, unknownNames = [];
+  Object.keys(unknown).forEach(function(nm){ unknownCnt += unknown[nm].length; unknownNames.push(nm); });
+  if (unknownCnt) ST.importMsg += '。另有 ' + unknownCnt + ' 行属未建档品种，请在弹窗中确认建档';
   if (Object.keys(batches).length > 1){
     ST.importMsg += '。可切换到其他品种查看其数据池';
   }
@@ -889,7 +975,124 @@ function applyImport(){
   refreshHeader();
   updatePoolInfo();
   syncImpMode();
+  if (unknownCnt) openProdNew(unknown);                  // 半自动建档弹窗（确认后才建池入库）
 }
+
+/* ---------- 新品种半自动建档弹窗 ---------- */
+var PN = { pending: null };
+function openProdNew(unknown){
+  PN.pending = unknown;
+  var box = $('#pnList');
+  box.innerHTML = Object.keys(unknown).map(function(nm, i){
+    var n = unknown[nm].length;
+    var blank = (nm === '(空白商品名)');
+    var kws = blank ? [] : kwFromName(nm);
+    return '<div class="pcard">'
+      + '<div class="ptitle"><input type="checkbox" class="pnChk" data-i="' + i + '"' + (blank ? ' disabled' : ' checked') + '> '
+      + esc(nm) + '（' + n + ' 行）</div>'
+      + (blank ? '<div class="hint" style="margin-left:24px">这些行没有商品名称，无法自动识别建档，本次将跳过。</div>'
+               : '<div class="prow"><b>显示名</b><input type="text" class="pnLabel" data-i="' + i + '" value="' + esc(nm) + '"></div>'
+                 + '<div class="prow"><b>识别词</b><input type="text" class="pnMatch" data-i="' + i + '" value="' + esc(kws.join('，')) + '"></div>'
+                 + '<div class="prow"><b>每盒天数</b><input type="number" class="pnDays" data-i="' + i + '" value="30" min="1" step="1" style="max-width:90px;flex:none"></div>'
+                 + '<div class="hint">识别词用于以后导入时自动分拣（命中任一即归入该品种）</div>')
+      + '</div>';
+  }).join('');
+  $('#pnOvl').hidden = false;
+}
+function closeProdNew(){ $('#pnOvl').hidden = true; PN.pending = null; }
+$('#pnSkip').onclick = closeProdNew;
+$('#pnOk').onclick = function(){
+  if (!PN.pending) { closeProdNew(); return; }
+  var names = Object.keys(PN.pending);
+  var created = [], createdRows = 0;
+  var mode = $('#impMode').value;
+  names.forEach(function(nm, i){
+    var chk = document.querySelector('.pnChk[data-i="' + i + '"]');
+    if (!chk || !chk.checked || nm === '(空白商品名)') return;
+    var label = document.querySelector('.pnLabel[data-i="' + i + '"]').value.trim();
+    var match = document.querySelector('.pnMatch[data-i="' + i + '"]').value.split(/[，,、\s]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+    var days = parseInt(document.querySelector('.pnDays[data-i="' + i + '"]').value, 10);
+    if (!label || !match.length || !(days >= 1)){ return; }
+    var id = dynId();
+    DYN.push({ id: id, label: label, match: match, daysPerBox: days, diagMode: 'source', diagOpts: [], dyn: true });
+    PDS[id] = { pool: [], manual: {}, fuv: null };
+    /* 把该品种的行并入新池（与主导入同样的替换/去重追加逻辑） */
+    var inRows = PN.pending[nm], target = PDS[id].pool;
+    if (!target.length || mode === 'replace'){
+      target = PDS[id].pool = inRows.slice();
+    } else {
+      var idx = {};
+      target.forEach(function(r, j){ idx[poolKey(r)] = j; });
+      inRows.forEach(function(r){ if (idx[poolKey(r)] === undefined){ idx[poolKey(r)] = target.length; target.push(r); } });
+    }
+    persistPid(id);
+    created.push(label + '（' + target.length + ' 条，每盒 ' + days + ' 天）');
+    createdRows += target.length;
+  });
+  closeProdNew();
+  if (created.length){
+    saveDyn();
+    fillProdSel();
+    updatePoolInfo();
+    alert('已建档并导入 ' + created.length + ' 个新品种：\n' + created.join('\n') + '\n\n品种下拉已更新，可随时切换查看；「品种管理」中可修改周期/识别词或删除。');
+  } else {
+    alert('没有勾选任何品种，未建档行已跳过（数据仍在上传文件里，重新导入可再触发本弹窗）。');
+  }
+};
+
+/* ---------- 品种管理弹窗 ---------- */
+function openProdMgr(){
+  var box = $('#pmList');
+  box.innerHTML = allProducts().map(function(p, i){
+    var n = PDS[p.id] ? PDS[p.id].pool.length : 0;
+    if (!p.dyn){
+      return '<div class="mrow"><b>' + esc(p.label) + '</b><span class="ro">每盒 ' + p.daysPerBox + ' 天 · 识别词 ' + esc(p.match.join('/')) + ' · ' + n + ' 条 · 内置品种</span></div>';
+    }
+    return '<div class="mrow" data-pid="' + p.id + '">'
+      + '<input type="text" class="pmLabel" value="' + esc(p.label) + '">'
+      + '<input type="number" class="pmDays" value="' + p.daysPerBox + '" min="1" step="1" style="max-width:80px" title="每盒天数">'
+      + '<input type="text" class="pmMatch" value="' + esc(p.match.join('，')) + '" title="识别词，逗号分隔">'
+      + '<span class="ro">' + n + '条</span>'
+      + '<button class="del" data-del="' + p.id + '">删除</button>'
+      + '</div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('[data-del]'), function(b){
+    b.onclick = function(){
+      var id = b.getAttribute('data-del');
+      var p = productOf(id), n = PDS[id] ? PDS[id].pool.length : 0;
+      if (!confirm('删除品种「' + (p ? p.label : id) + '」及其 ' + n + ' 条数据？\n此操作不可通过撤回恢复，如有需要请先「导出备份」。')) return;
+      DYN = DYN.filter(function(x){ return x.id !== id; });
+      delete PDS[id];
+      try { localStorage.removeItem(pidPoolKey(id)); localStorage.removeItem(pidManualKey(id)); localStorage.removeItem(pidFuvKey(id)); } catch(e){}
+      saveDyn();
+      if (ST.pid === id){ switchProduct(PRODUCTS[0].id); }
+      fillProdSel(); updatePoolInfo(); openProdMgr();
+    };
+  });
+  $('#pmOvl').hidden = false;
+}
+$('#btnProdMgr').onclick = openProdMgr;
+$('#pmClose').onclick = function(){ $('#pmOvl').hidden = true; };
+$('#pmSave').onclick = function(){
+  var changed = 0;
+  Array.prototype.forEach.call($('#pmList').querySelectorAll('.mrow[data-pid]'), function(row){
+    var id = row.getAttribute('data-pid'), p = productOf(id);
+    if (!p) return;
+    var label = row.querySelector('.pmLabel').value.trim();
+    var days = parseInt(row.querySelector('.pmDays').value, 10);
+    var match = row.querySelector('.pmMatch').value.split(/[，,、\s]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+    if (!label || !match.length || !(days >= 1)) return;
+    if (p.label !== label || p.daysPerBox !== days || p.match.join('|') !== match.join('|')){
+      p.label = label; p.daysPerBox = days; p.match = match; changed++;
+    }
+  });
+  $('#pmOvl').hidden = true;
+  if (changed){
+    saveDyn();
+    fillProdSel(); refreshHeader(); recompute();
+    alert('已保存 ' + changed + ' 个品种的修改。');
+  }
+};
 
 function curProduct(){ return productOf(ST.pid); }
 
@@ -1773,9 +1976,10 @@ function exportMissing(){
   if (I.missingKey.length) download('建档缺失名单_'+stamp()+'.csv', '\uFEFF'+lines.join('\r\n'), 'text/csv;charset=utf-8');
 }
 function exportBackup(){
-  /* 备份含全部品种的池与填写，避免只导当前品种丢其他品种 */
+  /* 备份含全部品种（含动态建档品种）的池与填写，避免只导当前品种丢其他品种 */
   var all = {};
-  PRODUCTS.forEach(function(p){
+  allProducts().forEach(function(p){
+    if (!PDS[p.id]) return;
     var clean = {};
     Object.keys(PDS[p.id].manual).forEach(function(k){
       var m = PDS[p.id].manual[k] || {};
@@ -1784,7 +1988,7 @@ function exportBackup(){
     all[p.id] = { pool: PDS[p.id].pool, manual: clean };
   });
   download('工作台备份_'+stamp()+'.json',
-    JSON.stringify({v:3, at:new Date().toISOString(), products:all, cur:ST.pid}, null, 1),
+    JSON.stringify({v:3, at:new Date().toISOString(), products:all, dyn:DYN, cur:ST.pid}, null, 1),
     'application/json');
 }
 function importBackup(file){
@@ -1795,8 +1999,18 @@ function importBackup(file){
       var msg = [];
       pushUndo('导入备份');
       if (o && o.v === 3 && o.products){
-        /* 新版：按品种恢复 */
-        PRODUCTS.forEach(function(p){
+        /* 新版：按品种恢复；备份自带动态品种档案则先合并 */
+        if (o.dyn && o.dyn.length){
+          o.dyn.forEach(function(p){
+            if (!p || !p.id || productOf(p.id)) return;
+            DYN.push({ id:p.id, label:p.label, match:p.match, daysPerBox:p.daysPerBox||30,
+                       diagMode:p.diagMode||'source', diagOpts:p.diagOpts||[], dyn:true });
+          });
+          saveDyn();
+          allProducts().forEach(function(p){ if (!PDS[p.id]) PDS[p.id] = { pool: [], manual: {}, fuv: null }; });
+          fillProdSel();
+        }
+        allProducts().forEach(function(p){
           var b = o.products[p.id];
           if (b){
             if (b.pool) PDS[p.id].pool = b.pool;
@@ -2147,7 +2361,8 @@ $('#prodSel').onchange = onSwitchProduct;
 var UNDO = { stack: [], MAX: 5 };
 function snapshotState(){
   var s = {};
-  PRODUCTS.forEach(function(p){
+  allProducts().forEach(function(p){
+    if (!PDS[p.id]) return;
     s[p.id] = { pool: PDS[p.id].pool.slice(), manual: JSON.parse(JSON.stringify(PDS[p.id].manual)) };
   });
   return s;
@@ -2170,9 +2385,9 @@ function undoLast(){
   }
   if (!confirm('撤回最近一次操作（' + top.tag + '，' + top.at.toLocaleTimeString() + '）？\n各品种数据池与填写内容会恢复到该操作之前的状态。')) return;
   UNDO.stack.pop();
-  PRODUCTS.forEach(function(p){
+  allProducts().forEach(function(p){
     var st = top.state[p.id];
-    if (st){ PDS[p.id].pool = st.pool; PDS[p.id].manual = st.manual; persistPid(p.id); }
+    if (st && PDS[p.id]){ PDS[p.id].pool = st.pool; PDS[p.id].manual = st.manual; persistPid(p.id); }
   });
   switchProduct(ST.pid);                               // 重新挂接 ST.pool/manual 引用并重置筛选
   recompute(); fillSelects(); refreshHeader(); updatePoolInfo(); syncImpMode(); fillProdSel();
@@ -2187,15 +2402,13 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260910b',
-  date: '2026-09-10',
-  sum: '明细表支持列显隐与紧凑排版、随访数据可导入匹配患者、撤回覆盖字段编辑',
+  ver: 'v20260917',
+  date: '2026-09-17',
+  sum: '新品种半自动建档：导入混品种底表时弹窗确认建池，每盒天数手填，品种下拉自动扩展',
   items: [
-    '🆕 <b>新增「导入随访」</b>：随访平台导出的任务表按打码电话＋姓氏自动匹配当前品种患者（实测匹配率 99%），明细表新增末次随访/用药状态/减停药原因/用药问题 4 列（默认隐藏，列设置中打开），导出 Excel 同步追加（20 列）',
-    '📑 <b>患者明细表新增「列设置」</b>：自由显示/隐藏列并记忆选择；表格整体紧凑化，药房名显示去「(连锁）」后缀（导出保留原文）',
-    '↩ <b>撤回范围扩大</b>：修改实际下次购药、诊断、备注等字段编辑也可撤回（最多 5 步，刷新清空）',
-    '🆕 <b>新增第四品种「安圣莎（阿来替尼）」</b>：28 天/盒，诊断列直接显示末次适应症；明细表与导出含「末次科室」列',
-    '💾 <b>支持本地后端存储</b>：数据池可存本机文件，不受浏览器 5MB 上限（桌面「患者工作台.bat」打开即连；本次更新后需重启一次后端）'
+    '🧬 <b>新品种半自动建档</b>：导入底表遇到未建档品种不再跳过，弹窗预填显示名/识别词，确认后自动建池入库；每盒天数手动填写（默认 30）',
+    '🗂 <b>新增「品种管理」</b>：动态品种可改名 / 改每盒天数 / 改识别词 / 删除（内置四品种只读）；改周期后全池自动重算',
+    '🧪 <b>博瑞纳随访表已兼容</b>：混品种随访导出按品种行级过滤，反馈内容自动剥「不良反应：」前缀'
   ]
 };
 (function(){
