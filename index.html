@@ -209,6 +209,19 @@
 /* ---------- 品种半自动建档 + 品种管理 弹窗 ---------- */
 .ovl{position:fixed;inset:0;background:rgba(59,53,80,.35);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
 .ovl[hidden]{display:none !important}   /* 关键：作者层 display:flex 会压过 hidden 属性的 UA 默认值，必须显式压制 */
+/* 新手引导（聚光灯式）：真实界面上高亮元素 + 说明卡 */
+#tourOvl{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2000}
+#tourOvl[hidden]{display:none}
+#tourCatch{position:absolute;left:0;top:0;right:0;bottom:0;background:transparent}
+#tourHl{position:absolute;display:none;border:2.5px solid #534AB7;border-radius:12px;box-shadow:0 0 0 200vmax rgba(44,44,42,.45);pointer-events:none;transition:all .25s}
+#tourCard{position:absolute;width:360px;max-width:calc(100vw - 24px);background:#fff;border:1.5px solid #534AB7;border-radius:14px;padding:16px 20px;z-index:2005}
+#tourStep{font-size:12.5px;color:#534AB7;font-weight:600;margin-bottom:4px}
+#tourTitle{font-size:18px;font-weight:600;color:#3C3489;margin-bottom:6px}
+#tourText{font-size:14.5px;color:#444441;line-height:1.65;margin-bottom:14px}
+.tourtbtns{display:flex;gap:10px;align-items:center}
+.tourtbtns button{font-size:14px;padding:8px 14px;border-radius:10px;border:1.5px solid #AFA9EC;background:#fff;color:#3C3489;cursor:pointer}
+.tourtbtns .pri{background:#534AB7;color:#fff;border-color:#534AB7}
+#tourSkip{border-color:#D3D1C7;color:#5F5E5A}
 /* 可搜索下拉：原生 select 升级为自定义面板（点开顶部带搜索框），select 本体保留为数据源与事件源 */
 .ssel{position:relative;display:inline-block}
 .ssel-native{display:none !important}
@@ -262,6 +275,7 @@
   <p>把 .xlsx 文件拖到这里，或点击选择</p>
   <div class="hint">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br>
   患者池与已填写的诊断/备注都保存在本机浏览器，下次打开无需再放文件。</div>
+  <div><button id="btnTourDrop" type="button" style="font-size:15px;padding:9px 16px;border-radius:10px;border:1.5px solid #AFA9EC;background:#fff;color:#3C3489;cursor:pointer">第一次使用？点这里看新手引导</button></div>
   <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
 
@@ -407,6 +421,7 @@
         <option value="stale90">超过 90 天未随访</option>
       </select>
       <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
+      <button id="btnTour" title="在真实界面上带你认识每个部分（随时可跳过）">? 新手引导</button>
       <details id="colSetD" class="colset">
         <summary title="选择要显示的列">列设置 ▾</summary>
         <div id="colSetBox"></div>
@@ -424,6 +439,23 @@
   </div>
 
 </div>
+</div>
+
+<!-- 新手引导（聚光灯式，真实界面高亮讲解） -->
+<div id="tourOvl" hidden>
+  <div id="tourCatch"></div>
+  <div id="tourHl"></div>
+  <div id="tourCard">
+    <div id="tourStep"></div>
+    <div id="tourTitle"></div>
+    <div id="tourText"></div>
+    <div class="tourtbtns">
+      <button id="tourSkip" type="button">跳过教程</button>
+      <span style="flex:1"></span>
+      <button id="tourPrev" type="button">上一步</button>
+      <button id="tourNext" type="button" class="pri">下一步</button>
+    </div>
+  </div>
 </div>
 
 <script>/*! xlsx.js (C) 2013-present SheetJS -- http://sheetjs.com */
@@ -2925,10 +2957,11 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260918e',
+  ver: 'v20260918f',
   date: '2026-09-18',
-  sum: '小结新增购药节奏差异指标：已回购但本期未购 / 本期购药但非本期到期',
+  sum: '新增「新手引导」：在真实界面上聚光灯式带你认识每个部分',
   items: [
+    '🎓 <b>新增「? 新手引导」按钮</b>：在真实界面上逐步高亮讲解（品种切换/搜索/脱敏/筛选/统计卡/明细表/小结），随时可跳过；全新用户首次打开自动弹出一次，之后可随时点按钮重看',
     '🔄 <b>小结新增差异指标</b>：已回购但本期未购（提前在上期买了）、本期购药但非本期到期（提前买下期/脱落回归）——两个人数合计即「购药节奏偏离理论周期」的规模，均可点击下钻看明细，差异明细含「购药节奏」列（提前 X 天 / 逾期 X 天）',
     '📅 <b>明细筛选新增「首购日期」</b>：按患者首次购药日期起止区间筛选，核查新患/老患更方便；与状态/药房/医院等筛选可叠加，切品种或换底表时自动清空',
     '👥 <b>小结新增本期购药拆分</b>：本期购药人数 = 新患（首次购药在本期）+ 老患（本期前已建档），三个数字均可点击下钻明细、弹窗导出名单',
@@ -2979,6 +3012,77 @@ bootstrapPids(function(){
     updatePoolInfo();
   }
 });
+
+/* ---------- 新手引导：真实界面聚光灯式高亮讲解（2026-09-18 用户需求：教程要结合原网页讲） ---------- */
+var TOUR_FLAG = 'patient_workbench_tour_done_v1';
+var TOUR = [
+  { t: '欢迎来到「销售患者工作台」', d: '用 1 分钟带你认识界面上每个有用的部分。随时可点「跳过教程」退出；以后想再看，点顶部的「? 新手引导」按钮即可。', sel: null },
+  { t: '品种切换', d: '点这里可以在不同药品之间切换，每个品种的患者名单各自独立。框里支持直接打字搜索，不用一个个翻。', sel: function(){ var s = document.querySelector('#prodSel'); return s ? (s.closest('.ssel') || s.closest('.sw') || s) : null; } },
+  { t: '搜索框', d: '输入姓名 / 电话 / 医生 / 医院快速找患者。开了脱敏也能搜：直接输「张*」这样的打码形式就行。', sel: '#q' },
+  { t: '脱敏开关', d: '给别人看屏幕、发截图之前先打开它：姓名电话全部打码，导出 Excel 也会同步打码。', sel: function(){ var m = document.querySelector('#mask'); return m ? (m.closest('label') || m) : null; } },
+  { t: '筛选区', d: '状态、药房、医院、购药日期等条件可以叠加使用。比如「某药房 + 断药预警」= 这家店里快断药、要联系回购的人。', sel: '#fStatus' },
+  { t: '统计卡', d: '在治 / 断药预警 / 脱落人数一眼看清。点卡片可以直接筛出对应的那批患者。', sel: '#kpis' },
+  { t: '患者明细表', d: '一行一位患者。部分格子可以直接点击填写：临床诊断、备注、实际下次购药——填完自动保存，填错了点「撤回」。', sel: '#tb' },
+  { t: '整体小结', d: '下面的橙色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；周期区间可以手工改。导入数据后这里才有统计。', sel: '#sumCard' },
+  { t: '完成！', d: '点「导入新数据」选择药房系统的销售 Excel，就能开始用了。更详细的图文教程，见配套的「工作台使用教程.html」。', sel: null }
+];
+var tourI = 0;
+function tourVisible(el){
+  for (var n = el; n; n = n.parentElement){
+    if (n.hidden) return false;
+    try { var cs = window.getComputedStyle ? window.getComputedStyle(n) : null; if (cs && cs.display === 'none') return false; } catch(e){}
+  }
+  return true;
+}
+function tourTarget(st){
+  if (!st.sel) return null;
+  try { var el = typeof st.sel === 'function' ? st.sel() : document.querySelector(st.sel);
+    return (el && tourVisible(el)) ? el : null; } catch(e){ return null; }
+}
+function renderTour(){
+  var st = TOUR[tourI];
+  if (tourI < TOUR.length - 1 && st.sel && !tourTarget(st)){ tourI++; return renderTour(); }  // 目标不可见（如空池无小结）自动跳过
+  var el = tourTarget(st);
+  document.getElementById('tourStep').textContent = '第 ' + (tourI + 1) + ' 步 / 共 ' + TOUR.length + ' 步';
+  document.getElementById('tourTitle').textContent = st.t;
+  document.getElementById('tourText').textContent = st.d;
+  document.getElementById('tourPrev').disabled = tourI === 0;
+  document.getElementById('tourNext').textContent = tourI === TOUR.length - 1 ? '完成' : '下一步';
+  var hl = document.getElementById('tourHl'), card = document.getElementById('tourCard');
+  if (el){
+    try { el.scrollIntoView({ block: 'center' }); } catch(e){}
+    var r = el.getBoundingClientRect();
+    hl.style.display = 'block';
+    hl.style.left = (r.left - 6) + 'px'; hl.style.top = (r.top - 6) + 'px';
+    hl.style.width = (r.width + 12) + 'px'; hl.style.height = (r.height + 12) + 'px';
+    card.style.transform = '';
+    var below = r.bottom + 200 < window.innerHeight;
+    card.style.top = (below ? r.bottom + 14 : Math.max(12, r.top - 200)) + 'px';
+    card.style.left = Math.max(12, Math.min(window.innerWidth - 372, r.left)) + 'px';
+  } else {
+    hl.style.display = 'none';
+    card.style.top = '50%'; card.style.left = '50%';
+    card.style.transform = 'translate(-50%,-50%)';
+  }
+}
+function tourStart(){ tourI = 0; document.getElementById('tourOvl').hidden = false; renderTour();
+  window.addEventListener('resize', renderTour); }
+function tourEnd(){ document.getElementById('tourOvl').hidden = true;
+  window.removeEventListener('resize', renderTour);
+  try { localStorage.setItem(TOUR_FLAG, '1'); } catch(e){} }
+document.getElementById('tourNext').onclick = function(){ if (tourI >= TOUR.length - 1){ tourEnd(); } else { tourI++; renderTour(); } };
+document.getElementById('tourPrev').onclick = function(){ if (tourI > 0){ tourI--; renderTour(); } };
+document.getElementById('tourSkip').onclick = tourEnd;
+var btnTour = document.getElementById('btnTour'); if (btnTour) btnTour.onclick = tourStart;
+var btnTourDrop = document.getElementById('btnTourDrop'); if (btnTourDrop) btnTourDrop.onclick = tourStart;
+/* 全新用户（从未看过引导且没有任何数据池）自动弹出一次 */
+try {
+  if (!localStorage.getItem(TOUR_FLAG)){
+    var tourAny = false;
+    for (var tk in PDS){ if (PDS[tk].pool && PDS[tk].pool.length){ tourAny = true; break; } }
+    if (!tourAny) setTimeout(tourStart, 400);
+  }
+} catch(e){}
 })();
 </script>
 </body>
