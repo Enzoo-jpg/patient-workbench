@@ -278,6 +278,7 @@
   <p>把 .xlsx 文件拖到这里，或点击选择</p>
   <div class="hint">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br>
   患者池与已填写的诊断/备注都保存在本机浏览器，下次打开无需再放文件。</div>
+  <div id="dropStatus" style="margin-top:10px;font-size:14.5px;color:#0F6E56;font-weight:600"></div>
   <div><button id="btnTourDrop" type="button" style="font-size:15px;padding:9px 16px;border-radius:10px;border:1.5px solid #AFA9EC;background:#fff;color:#3C3489;cursor:pointer">第一次使用？点这里看新手引导</button></div>
   <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
@@ -828,12 +829,14 @@ function classifyRow(r){
 /* ---------- 本地后端存储（可选增强）：探测 127.0.0.1:8761 ----------
    可用则数据池存到本机 F:\wb-backend\data\<pid>.json（无容量上限）；
    不可用则退回浏览器 localStorage。两种模式读写都走同一组函数。 */
-var BE = { on: false, base: 'http://127.0.0.1:8761', saving: 0, fail: false };
+var BE = { on: false, saving: 0, fail: false, base: (function(){ try { return localStorage.getItem('patient_workbench_be_base') || 'http://127.0.0.1:8761'; } catch(e){ return 'http://127.0.0.1:8761'; } })() };
 function beSave(pid){
   BE.saving++; BE.fail = false; updatePoolInfo();
+  var pr = productOf(pid);
+  var meta = (pr && pr.dyn) ? { label: pr.label, match: pr.match, daysPerBox: pr.daysPerBox, diagMode: pr.diagMode, diagOpts: pr.diagOpts || [] } : null;
   fetch(BE.base + '/api/save', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pid: pid, pool: PDS[pid].pool, manual: PDS[pid].manual, fuv: PDS[pid].fuv || null })
+    body: JSON.stringify({ pid: pid, pool: PDS[pid].pool, manual: PDS[pid].manual, fuv: PDS[pid].fuv || null, meta: meta })
   }).then(function(r){
     BE.saving--;
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -849,6 +852,7 @@ function beSave(pid){
   });
 }
 function persistPid(pid){
+  if (PDS[pid]) PDS[pid].loaded = true;      // 内存池已是权威数据，无需再懒加载
   if (BE.on){ beSave(pid); return; }
   try {
     localStorage.setItem(pidPoolKey(pid), JSON.stringify(PDS[pid].pool));
@@ -890,6 +894,7 @@ function bootstrapPids(done){
     }
   }
   function finish(){
+    var ds = $('#dropStatus'); if (ds) ds.textContent = '';
     var saved = null;
     try { saved = localStorage.getItem(PID_STORAGE_KEY); } catch(e){}
     var pid = 'nuobeige';
@@ -900,29 +905,80 @@ function bootstrapPids(done){
   }
 
   beProbe(function(on){
+    var ds0 = $('#dropStatus');
+    if (ds0) ds0.textContent = on ? '已连上本地后端，正在恢复数据…' : '未检测到本地后端，正在从浏览器存储恢复…';
     if (!on){ loadFromLocal(); finish(); return; }
     BE.on = true;
-    fetch(BE.base + '/api/state', { cache: 'no-store' })
-      .then(function(r){ return r.json(); })
-      .then(function(j){
-        var st = (j && j.products) || {};
-        var hasRemote = false;
-        Object.keys(st).forEach(function(pid){
-          if (!PDS[pid]) return;
-          if (st[pid].pool && st[pid].pool.length) hasRemote = true;
-          PDS[pid].pool   = st[pid].pool   || [];
-          PDS[pid].manual = st[pid].manual || {};
-          PDS[pid].fuv    = st[pid].fuv    || null;   // 随访数据一并恢复（此前漏了，刷新后随访需重导）
-        });
-        if (!hasRemote){
+    /* 旧版服务器（无 /api/index）→ 全量恢复兼容路径 */
+    function legacyFullLoad(){
+      fetch(BE.base + '/api/state', { cache: 'no-store' })
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          var st = (j && j.products) || {};
+          var hasRemote = false;
+          Object.keys(st).forEach(function(pid){
+            if (!PDS[pid]) return;
+            if (st[pid].pool && st[pid].pool.length) hasRemote = true;
+            PDS[pid].pool   = st[pid].pool   || [];
+            PDS[pid].manual = st[pid].manual || {};
+            PDS[pid].fuv    = st[pid].fuv    || null;
+            PDS[pid].loaded = true;
+          });
+          if (!hasRemote){
+            loadFromLocal();
+            allProducts().forEach(function(p){ if (PDS[p.id].pool.length){ PDS[p.id].loaded = true; beSave(p.id); } });
+          }
+          finish();
+        })
+        .catch(function(){ BE.on = false; loadFromLocal(); finish(); });
+    }
+    /* 2026-09-18 结构性修复：品种池越来越多后 /api/state 全量恢复达 138MB/103s，
+       刷新长期停在「载入销售数据」页像数据丢失。改为 /api/index 轻索引 + 当前品种
+       /api/pool 懒加载（其余品种切到时再取），刷新秒开。旧版服务器回退全量兼容。 */
+    fetch(BE.base + '/api/index', { cache: 'no-store' })
+      .then(function(r){ if (!r.ok) throw new Error('no index'); return r.json(); })
+      .then(function(idx){
+        var st = (idx && idx.products) || {};
+        var pids = Object.keys(st);
+        if (!pids.length){
           /* 服务器还是空的：把浏览器现有数据一次性搬到后端 */
           loadFromLocal();
-          allProducts().forEach(function(p){ if (PDS[p.id].pool.length) beSave(p.id); });
+          allProducts().forEach(function(p){ if (PDS[p.id].pool.length){ PDS[p.id].loaded = true; beSave(p.id); } });
+          finish();
+          return;
         }
+        pids.forEach(function(pid){
+          if (!PDS[pid]) PDS[pid] = { pool: [], manual: {}, fuv: null, loaded: false };
+          PDS[pid].loaded = false; PDS[pid].remote = true;
+          var meta = st[pid] && st[pid].meta;
+          if (meta && meta.label && String(pid).indexOf('dyn_') === 0 && !productOf(pid)) registerDynMeta(pid, meta);
+        });
         finish();
       })
-      .catch(function(){ BE.on = false; loadFromLocal(); finish(); });
+      .catch(function(){ legacyFullLoad(); });
   });
+}
+/* 动态品种档案从服务器 meta 恢复注册（浏览器 localStorage 被清时兜底） */
+function registerDynMeta(pid, meta){
+  DYN.push({ id: pid, label: meta.label, match: meta.match || [], daysPerBox: meta.daysPerBox || 30,
+             diagMode: meta.diagMode || 'source', diagOpts: meta.diagOpts || [], dyn: true });
+  try { saveDyn(); } catch(e){}
+}
+/* 按需拉取单个品种池（含动态品种档案 meta） */
+function beLoadPool(pid, cb){
+  fetch(BE.base + '/api/pool?pid=' + encodeURIComponent(pid), { cache: 'no-store' })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (!PDS[pid]) PDS[pid] = { pool: [], manual: {}, fuv: null };
+      /* 加载期间本地已产生权威数据（如刚导入）则不覆盖 */
+      if (PDS[pid].loaded === true){ if (cb) cb(true); return; }
+      PDS[pid].pool = j.pool || []; PDS[pid].manual = j.manual || {}; PDS[pid].fuv = j.fuv || null;
+      PDS[pid].loaded = true;
+      var meta = j.meta;
+      if (meta && meta.label && String(pid).indexOf('dyn_') === 0 && !productOf(pid)) registerDynMeta(pid, meta);
+      if (cb) cb(true);
+    })
+    .catch(function(){ if (PDS[pid]) PDS[pid].loaded = true; if (cb) cb(false); });
 }
 /* 顶栏品种下拉填充与切换 */
 function fillProdSel(){
@@ -948,8 +1004,10 @@ function onSwitchProduct(){
 }
 /* 把当前品种换成 pid：先持久化旧品种，再指向新品种数据（UI 刷新由调用方负责） */
 function switchProduct(pid){
-  if (ST.pid && ST.pid !== pid) persistPid(ST.pid);
+  /* ⚠️ 旧品种未完成懒加载时绝不保存——防止空池覆盖服务器数据（2026-09-18） */
+  if (ST.pid && ST.pid !== pid && PDS[ST.pid] && PDS[ST.pid].loaded !== false) persistPid(ST.pid);
   ST.pid = pid;
+  if (!PDS[pid]) PDS[pid] = { pool: [], manual: {}, fuv: null, loaded: true };
   ST.pool = PDS[pid].pool;
   ST.manual = PDS[pid].manual;
   try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
@@ -958,6 +1016,26 @@ function switchProduct(pid){
   ['#q','#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNote','#dStore'].forEach(function(s){
     var el = $(s); if (el) el.value = '';
   });
+  /* 后端懒加载：该品种还没从服务器取过 → 取到后重渲染（2026-09-18 结构性修复） */
+  var entry = PDS[pid];
+  if (BE.on && entry.loaded === false && !entry.loading){
+    entry.loading = true;
+    var myPid = pid;
+    ST.loadingPool = true;
+    var dsL = $('#dropStatus');
+    if (dsL) dsL.textContent = '正在加载「' + (curProduct() ? curProduct().label : pid) + '」的数据，请稍候…';
+    beLoadPool(pid, function(ok){
+      entry.loading = false;
+      if (ST.pid !== myPid) return;                    // 用户已切走，丢弃
+      ST.loadingPool = false;
+      var ds2 = $('#dropStatus'); if (ds2) ds2.textContent = '';
+      if (ok && entry.pool.length){
+        $('#drop').hidden = true; $('#app').hidden = false;
+      }
+      ST.pool = entry.pool; ST.manual = entry.manual || {};
+      recompute(); fillSelects(); refreshHeader(); updatePoolInfo(); render();
+    });
+  }
 }
 
 /* ---------- 患者数据池（累计留存，增减都基于它计算） ---------- */
@@ -1537,7 +1615,10 @@ function render(){
   /* 选错工作表的保护：优先按表头判断必需列，再看数据 */
   var nd = $('#nudge');
   var missCols = ST.header ? missingHeaders(ST.header) : [];
-  if (!ST.pool.length){
+  if (!ST.pool.length && ST.loadingPool){
+    nd.hidden = false;
+    nd.innerHTML = '<b>正在从本地后端加载该品种数据…</b> 几秒内完成，请稍候。';
+  } else if (!ST.pool.length){
     /* 空池品种：明确告知数据在其它品种池，避免误解为丢失（2026-09-17） */
     var pl = curProduct() ? curProduct().label : '当前品种';
     nd.hidden = false;
@@ -2264,16 +2345,35 @@ function exportMissing(){
   if (I.missingKey.length) download('建档缺失名单_'+stamp()+'.csv', '\uFEFF'+lines.join('\r\n'), 'text/csv;charset=utf-8');
 }
 function exportBackup(){
-  /* 备份含全部品种（含动态建档品种）的池与填写，避免只导当前品种丢其他品种 */
+  /* 备份含全部品种（含动态建档品种）的池与填写，避免只导当前品种丢其他品种。
+     懒加载模式下未取回的品种先从后端汇总（2026-09-18） */
+  var ids = [], seen = {};
+  allProducts().forEach(function(p){ if (!seen[p.id]){ seen[p.id] = 1; ids.push(p.id); } });
+  Object.keys(PDS).forEach(function(k){ if (!seen[k]){ seen[k] = 1; ids.push(k); } });
+  var need = ids.filter(function(id){ return BE.on && PDS[id] && PDS[id].loaded === false; });
+  if (need.length){
+    var nd = $('#nudge');
+    if (nd){ nd.hidden = false; nd.innerHTML = '<b>正在从本地后端汇总全部品种数据（' + need.length + ' 个品种）…</b> 汇总完成后自动开始下载备份，请稍候。'; }
+    var left = need.length;
+    need.forEach(function(id){
+      beLoadPool(id, function(){
+        if (--left === 0) doExportBackup(ids);
+      });
+    });
+    return;
+  }
+  doExportBackup(ids);
+}
+function doExportBackup(ids){
   var all = {};
-  allProducts().forEach(function(p){
-    if (!PDS[p.id]) return;
+  (ids || Object.keys(PDS)).forEach(function(id){
+    if (!PDS[id]) return;
     var clean = {};
-    Object.keys(PDS[p.id].manual).forEach(function(k){
-      var m = PDS[p.id].manual[k] || {};
+    Object.keys(PDS[id].manual).forEach(function(k){
+      var m = PDS[id].manual[k] || {};
       if (m.diag || m.pay || m.note || m.noteDate) clean[k] = m;
     });
-    all[p.id] = { pool: PDS[p.id].pool, manual: clean, sum: sumManual(p.id) };
+    all[id] = { pool: PDS[id].pool, manual: clean, sum: sumManual(id) };
   });
   download('工作台备份_'+stamp()+'.json',
     JSON.stringify({v:3, at:new Date().toISOString(), products:all, dyn:DYN, cur:ST.pid}, null, 1),
