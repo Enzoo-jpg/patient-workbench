@@ -222,6 +222,9 @@
 .tourtbtns button{font-size:14px;padding:8px 14px;border-radius:10px;border:1.5px solid #AFA9EC;background:#fff;color:#3C3489;cursor:pointer}
 .tourtbtns .pri{background:#534AB7;color:#fff;border-color:#534AB7}
 #tourSkip{border-color:#D3D1C7;color:#5F5E5A}
+#tourBall{position:fixed;right:18px;bottom:18px;z-index:1990;width:52px;height:52px;border-radius:50%;background:#534AB7;color:#fff;font-size:22px;font-weight:600;border:3px solid #fff;cursor:pointer}
+#tourBall:hover{background:#3C3489}
+#tourBall[hidden]{display:none}
 /* 可搜索下拉：原生 select 升级为自定义面板（点开顶部带搜索框），select 本体保留为数据源与事件源 */
 .ssel{position:relative;display:inline-block}
 .ssel-native{display:none !important}
@@ -442,6 +445,7 @@
 </div>
 
 <!-- 新手引导（聚光灯式，真实界面高亮讲解） -->
+<button id="tourBall" type="button" title="新手引导：点此随时重看" hidden>?</button>
 <div id="tourOvl" hidden>
   <div id="tourCatch"></div>
   <div id="tourHl"></div>
@@ -2961,7 +2965,7 @@ var NOTICE = {
   date: '2026-09-18',
   sum: '新增「新手引导」：在真实界面上聚光灯式带你认识每个部分',
   items: [
-    '🎓 <b>新增「? 新手引导」按钮</b>：在真实界面上逐步高亮讲解（品种切换/搜索/脱敏/筛选/统计卡/明细表/小结），随时可跳过；全新用户首次打开自动弹出一次，之后可随时点按钮重看',
+    '🎓 <b>新增「? 新手引导」</b>：在真实界面上逐步高亮讲解（品种切换/搜索/脱敏/筛选/统计卡/明细表/小结），随时可跳过；首次打开自动演示一次，之后缩小为右下角「?」悬浮球，随时点开重看',
     '🔄 <b>小结新增差异指标</b>：已回购但本期未购（提前在上期买了）、本期购药但非本期到期（提前买下期/脱落回归）——两个人数合计即「购药节奏偏离理论周期」的规模，均可点击下钻看明细，差异明细含「购药节奏」列（提前 X 天 / 逾期 X 天）',
     '📅 <b>明细筛选新增「首购日期」</b>：按患者首次购药日期起止区间筛选，核查新患/老患更方便；与状态/药房/医院等筛选可叠加，切品种或换底表时自动清空',
     '👥 <b>小结新增本期购药拆分</b>：本期购药人数 = 新患（首次购药在本期）+ 老患（本期前已建档），三个数字均可点击下钻明细、弹窗导出名单',
@@ -3065,9 +3069,12 @@ function renderTour(){
     card.style.transform = 'translate(-50%,-50%)';
   }
 }
-function tourStart(){ tourI = 0; document.getElementById('tourOvl').hidden = false; renderTour();
+function tourStart(){ tourI = 0; document.getElementById('tourOvl').hidden = false;
+  document.getElementById('tourBall').hidden = true;      // 引导进行中隐藏悬浮球
+  renderTour();
   window.addEventListener('resize', renderTour); }
 function tourEnd(){ document.getElementById('tourOvl').hidden = true;
+  document.getElementById('tourBall').hidden = false;     // 结束后悬浮球回到右下角（用户 2026-09-18：首次演示，后续缩小常驻）
   window.removeEventListener('resize', renderTour);
   try { localStorage.setItem(TOUR_FLAG, '1'); } catch(e){} }
 document.getElementById('tourNext').onclick = function(){ if (tourI >= TOUR.length - 1){ tourEnd(); } else { tourI++; renderTour(); } };
@@ -3075,14 +3082,19 @@ document.getElementById('tourPrev').onclick = function(){ if (tourI > 0){ tourI-
 document.getElementById('tourSkip').onclick = tourEnd;
 var btnTour = document.getElementById('btnTour'); if (btnTour) btnTour.onclick = tourStart;
 var btnTourDrop = document.getElementById('btnTourDrop'); if (btnTourDrop) btnTourDrop.onclick = tourStart;
-/* 全新用户（从未看过引导且没有任何数据池）自动弹出一次 */
+document.getElementById('tourBall').onclick = tourStart;
+/* 悬浮球显示规则：看过引导（或已有数据的老用户）常驻右下角；全新用户先自动演示，结束后再出现 */
 try {
-  if (!localStorage.getItem(TOUR_FLAG)){
+  var tourSeen = !!localStorage.getItem(TOUR_FLAG);
+  if (!tourSeen){
     var tourAny = false;
     for (var tk in PDS){ if (PDS[tk].pool && PDS[tk].pool.length){ tourAny = true; break; } }
-    if (!tourAny) setTimeout(tourStart, 400);
+    if (!tourAny){ setTimeout(tourStart, 400); }          // 全新用户：自动演示一次，结束后球出现
+    else { document.getElementById('tourBall').hidden = false; }   // 有数据但没看过引导：直接出球
+  } else {
+    document.getElementById('tourBall').hidden = false;   // 看过引导：常驻
   }
-} catch(e){}
+} catch(e){ document.getElementById('tourBall').hidden = false; }
 })();
 </script>
 </body>
