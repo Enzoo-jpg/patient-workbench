@@ -117,6 +117,26 @@
   tbody tr.row-sel{background:#E4DCF5;box-shadow:inset 3px 0 0 var(--violet)}
   tbody tr.row-sel:hover{background:#DCD2F0}
   tbody tr.row-sel td{border-bottom-color:#D4C9EC}
+  /* 整体小结（2026-09-18）：自动统计 + 橙色数字人工可改 + 复制 */
+  .sumHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .sumTitle{font-size:14px;color:var(--ink)}
+  .sumCycle{display:inline-flex;gap:4px}
+  .sumBtn{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink2);cursor:pointer}
+  .sumBtn.on{background:var(--violet);border-color:var(--violet);color:#fff}
+  .sumRange{font-size:12.5px;color:var(--ink2)}
+  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid var(--violet);
+    background:var(--violet-l);color:var(--violet);cursor:pointer}
+  .sumCopy:hover{background:var(--violet);color:#fff}
+  .sumBody{background:#FBFAFD;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
+    font-size:13px;color:var(--ink);line-height:2}
+  .sumBody .sn{font-weight:700;color:var(--violet);margin-right:6px}
+  .snum{color:#E8A23D;font-weight:700;cursor:pointer;border-bottom:1px dashed #E8A23D;padding:0 2px}
+  .snum:hover{background:#FDF3E3}
+  .snum input{width:64px;font:inherit;font-weight:700;color:var(--violet);border:1px solid var(--violet);
+    border-radius:5px;padding:0 4px;text-align:center}
+  .snum input:focus{outline:none;background:#fff}
+  .sumTip{font-size:12px;color:var(--ink3);margin-top:6px}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
   .st{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600}
   .st-在治{background:var(--green-l);color:#4F7C5E}
@@ -308,6 +328,23 @@
   <div class="nudge" id="nudge" hidden></div>
 
   <div class="kpis" id="kpis"></div>
+
+  <!-- 整体小结：自动统计 + 橙色数字人工可改 + 一键复制（2026-09-18） -->
+  <div class="card" id="sumCard" hidden>
+    <div class="sumHead">
+      <b class="sumTitle">整体小结</b>
+      <span class="sumCycle">
+        <button type="button" class="sumBtn" data-cy="-1">上周</button>
+        <button type="button" class="sumBtn on" data-cy="0">本周</button>
+        <button type="button" class="sumBtn" data-cy="1">下周</button>
+      </span>
+      <span class="sumRange" id="sumRange"></span>
+      <span class="grow"></span>
+      <button type="button" id="btnCopySum" class="sumCopy" title="复制小结文字，可直接粘贴到微信/群">复制小结</button>
+    </div>
+    <div class="sumBody" id="sumBody"></div>
+    <div class="sumTip">💡 橙色数字可直接点击修改（人工修正优先于自动统计，自动保存）</div>
+  </div>
 
   <div class="dist" id="dist"></div>
 
@@ -1499,6 +1536,7 @@ function render(){
   updateDStoreInfo();
   renderQuality();
   renderTable();
+  renderSummary();
 }
 function kpi(cls, lb, vl, ex, drill, active, tip){
   var cl = cls + (drill ? ' kpi-click' : '') + (active ? ' kpi-active' : '');
@@ -1508,6 +1546,58 @@ function kpi(cls, lb, vl, ex, drill, active, tip){
          (drill ? ' data-drill="' + drill + '"' : '') +
          ' title="' + tl + '">' +
          '<div class="lb">'+lb+'</div><div class="vl">'+vl+'</div><div class="ex">'+ex+'</div></div>';
+}
+
+/* ---------- 整体小结（2026-09-18）：自动统计 + 橙色数字人工可改 + 一键复制 ----------
+   口径（用户拍板）：
+   · 应回购 = 实际下次购药（人工填）优先、回退理论下次购药，落在所选周期内
+   · 已回购 = 该患者末次购药记录落在所选周期内；未回购 = 应回购 - 已回购
+   · 原因细分 v1 暂不接随访数据；「下一周期预计复购」= 下一周期内有效下次购药日期人数
+   · 橙色数字点击可人工修正，按「品种+指标+周期」存本机，人工值优先于自动统计 */
+function sumWeekStart(off){
+  var d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + off * 7);   // 周一为一周开始
+  return d.getTime();
+}
+function sumMD(ms){
+  var d = new Date(ms), m = d.getMonth() + 1, dd = d.getDate();
+  return (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+}
+function sumManual(pid){
+  try { return JSON.parse(localStorage.getItem('patient_workbench_summary_v2_' + pid) || '{}') || {}; }
+  catch(e){ return {}; }
+}
+function saveSumManual(pid, o){
+  try { localStorage.setItem('patient_workbench_summary_v2_' + pid, JSON.stringify(o)); } catch(e){}
+}
+function renderSummary(){
+  var card = $('#sumCard'); if (!card) return;
+  if (!ST.pool.length){ card.hidden = true; return; }
+  card.hidden = false;
+  var off = ST.sumCycle || 0;
+  var ws = sumWeekStart(off), we = ws + 7*86400000, nws = ws + 7*86400000;
+  var lab = off === 0 ? '本周' : (off === -1 ? '上周' : '下周');
+  var due = 0, bought = 0, nextP = 0;
+  (ST.result.patients || []).forEach(function(p){
+    var eff = effNextMs(p);
+    if (eff >= ws && eff < we){ due++; if (p.lastBuyMs >= ws && p.lastBuyMs < we) bought++; }
+    if (eff >= nws && eff < nws + 7*86400000) nextP++;
+  });
+  var sm = sumManual(ST.pid);
+  var kDue = 'due@'+ws, kBou = 'bought@'+ws, kPen = 'pen@'+ws, kR = 'rate@'+ws, kNext = 'next@'+nws;
+  var vDue = sm[kDue] != null ? sm[kDue] : due;
+  var vBou = sm[kBou] != null ? sm[kBou] : bought;
+  var vPen = sm[kPen] != null ? sm[kPen] : Math.max(0, vDue - vBou);
+  var vNext = sm[kNext] != null ? sm[kNext] : nextP;
+  var vRate = sm[kR] != null ? sm[kR] : (vDue > 0 ? Math.round(vBou / vDue * 100) : null);
+  $('#sumRange').textContent = lab + ' ' + sumMD(ws) + ' ~ ' + sumMD(we - 86400000) +
+    '（下一周期 ' + sumMD(nws) + ' ~ ' + sumMD(nws + 7*86400000 - 86400000) + '）';
+  function sn(k, v, suf){ return '<span class="snum" data-sk="' + k + '" title="点击修改">' + v + (suf || '') + '</span>'; }
+  $('#sumBody').innerHTML =
+    '<div><span class="sn">1.</span>' + lab + '应回购 ' + sn(kDue, vDue) + ' 人：已回购 ' + sn(kBou, vBou) +
+    ' 人、未回购 ' + sn(kPen, vPen) + ' 人；</div>' +
+    '<div><span class="sn">2.</span>' + lab + '回购率 ' + sn(kR, vRate == null ? '—' : vRate, '%') + '；</div>' +
+    '<div><span class="sn">3.</span>下一周期预计复购 ' + sn(kNext, vNext) + ' 人。</div>';
 }
 /* 指标卡下钻：点卡片 → 明细表按该条件筛选；再点一次取消 */
 function drill(what){
@@ -2040,7 +2130,7 @@ function exportBackup(){
       var m = PDS[p.id].manual[k] || {};
       if (m.diag || m.pay || m.note || m.noteDate) clean[k] = m;
     });
-    all[p.id] = { pool: PDS[p.id].pool, manual: clean };
+    all[p.id] = { pool: PDS[p.id].pool, manual: clean, sum: sumManual(p.id) };
   });
   download('工作台备份_'+stamp()+'.json',
     JSON.stringify({v:3, at:new Date().toISOString(), products:all, dyn:DYN, cur:ST.pid}, null, 1),
@@ -2070,6 +2160,7 @@ function importBackup(file){
           if (b){
             if (b.pool) PDS[p.id].pool = b.pool;
             if (b.manual) PDS[p.id].manual = b.manual;
+            if (b.sum) saveSumManual(p.id, b.sum);        // 小结人工修正一并恢复
             persistPid(p.id);
             msg.push(p.label + '：' + (b.pool ? b.pool.length : 0) + ' 条记录');
           }
@@ -2505,6 +2596,52 @@ $('#tb').addEventListener('click', function(ev){
   ST.rowSelKey = key;
 });
 
+/* ---------- 整体小结：周期切换 + 数字人工修正 + 复制 ---------- */
+Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(b){
+  b.onclick = function(){
+    ST.sumCycle = +b.getAttribute('data-cy');
+    Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(x){ x.classList.toggle('on', x === b); });
+    renderSummary();
+  };
+});
+$('#sumBody').addEventListener('click', function(ev){
+  var sp = ev.target.closest ? ev.target.closest('.snum') : null;
+  if (!sp || sp.querySelector('input')) return;
+  var sk = sp.getAttribute('data-sk');
+  var cur = sp.textContent.replace(/[^0-9.\-]/g, '');
+  sp.innerHTML = '<input type="number" value="' + cur + '">';
+  var inp = sp.querySelector('input');
+  inp.focus(); inp.select();
+  var ended = false;
+  var done = function(save){                              // true=保存(含清空=恢复自动值)；false=Esc 取消编辑
+    if (ended) return; ended = true;
+    if (save === false){ renderSummary(); return; }
+    var sm = sumManual(ST.pid);
+    if (save && inp.value !== '' && isFinite(+inp.value)) sm[sk] = +inp.value; else delete sm[sk];
+    saveSumManual(ST.pid, sm);
+    renderSummary();
+  };
+  inp.onkeydown = function(e){
+    if (e.key === 'Enter') done(true);
+    else if (e.key === 'Escape') done(false);
+  };
+  inp.onblur = function(){ done(true); };
+});
+$('#btnCopySum').onclick = function(){
+  var txt = '【整体小结 · ' + (curProduct() ? curProduct().label : '') + ' · ' + $('#sumRange').textContent + '】\n' + $('#sumBody').innerText;
+  var b = this;
+  var oked = function(){ b.textContent = '已复制 ✓'; setTimeout(function(){ b.textContent = '复制小结'; }, 1500); };
+  var fallback = function(){
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); oked(); } catch(e){}
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(oked, fallback);
+  else fallback();
+};
+
 /* ---------- 撤回：数据级操作前自动留快照，可回退最近 3 次（用户 2026-09-10） ---------- */
 var UNDO = { stack: [], MAX: 5 };
 function snapshotState(){
@@ -2550,16 +2687,16 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260917d',
-  date: '2026-09-17',
-  sum: '切换品种体验修复：切到暂无数据的品种不再回到导入页，数据不会因此丢失',
+  ver: 'v20260918a',
+  date: '2026-09-18',
+  sum: '新增「整体小结」：自动统计本周回购情况，橙色数字可人工修正，一键复制',
   items: [
+    '📋 <b>新增「整体小结」</b>：KPI 下方自动生成本周应回购/已回购/未回购/回购率/下周预计复购，周期可切上周/本周/下周；橙色数字点击即可人工修正（清空回车恢复自动值），一键复制成文字可直接粘贴到微信',
     '🧬 <b>新品种半自动建档</b>：导入底表遇到未建档品种不再跳过，弹窗预填显示名/识别词，确认后自动建池入库；每盒天数手动填写（默认 30）',
     '🗂 <b>新增「品种管理」</b>：动态品种可改名 / 改每盒天数 / 改识别词 / 删除（内置四品种只读）；改周期后全池自动重算',
     '📥 <b>随访导入按品种自动分拣</b>：混品种任务表一次导入，各品种池分别聚合匹配（无需切换品种重复导入）；未建档品种任务自动跳过并注明',
     '🔍 <b>筛选下拉内置搜索</b>：品种 / 药房 / 医院下拉点开后顶部带搜索框，选项多时输入关键字即时定位；选中项高亮，点外部自动收起',
-    '🔀 <b>切换品种体验修复</b>：切到暂无数据的品种时保留工作台界面并提示「数据在其它品种池」，不再回到导入页造成「数据丢失」错觉',
-    '🐛 <b>修复弹窗常驻显示问题</b>：弹窗此前会空壳常驻且关闭无效（样式覆盖 hidden 属性）'
+    '🔀 <b>切换品种体验修复</b>：切到暂无数据的品种时保留工作台界面并提示「数据在其它品种池」，不再回到导入页造成「数据丢失」错觉'
   ]
 };
 (function(){
