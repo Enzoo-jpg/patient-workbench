@@ -112,7 +112,11 @@
     border-radius:var(--r);box-shadow:var(--sd);padding:8px 10px;z-index:40;min-width:170px;max-height:300px;overflow:auto}
   #colSetBox label{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12.5px;cursor:pointer;white-space:nowrap}
   #colSetBox .cbtn{margin-top:6px;width:100%;text-align:center;font-size:12px;padding:3px 0}
-  tbody tr:hover{background:#FBFAFD}
+  tbody tr:hover{background:var(--violet-l)}
+  /* 选中行：更鲜明的紫底 + 左侧紫条（用户 2026-09-18），点击行切换选中，再点取消 */
+  tbody tr.row-sel{background:#E4DCF5;box-shadow:inset 3px 0 0 var(--violet)}
+  tbody tr.row-sel:hover{background:#DCD2F0}
+  tbody tr.row-sel td{border-bottom-color:#D4C9EC}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
   .st{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600}
   .st-在治{background:var(--green-l);color:#4F7C5E}
@@ -1867,7 +1871,7 @@ function renderTable(){
     var m = manualOf(p.key);
     var pay = m.pay || p.pay || '';
     var st = effStatus(p);
-    return '<tr>' + vcols.map(function(c){ return cellOf(c.k, p, m, pay, st, mask); }).join('') + '</tr>';
+    return '<tr data-key="' + esc(p.key) + '"' + (ST.rowSelKey === p.key ? ' class="row-sel"' : '') + '>' + vcols.map(function(c){ return cellOf(c.k, p, m, pay, st, mask); }).join('') + '</tr>';
   }).join('');
   $('#tb').innerHTML = html;
 
@@ -2481,6 +2485,25 @@ $('#btnClearPool').onclick = function(){
 
 /* 切换品种事件 */
 $('#prodSel').onchange = onSwitchProduct;
+
+/* 明细表点击选中行：Pastel 紫高亮，再点同一行取消；选中键记录后重渲染（筛选/排序/改值）自动恢复。
+   点击行内编辑控件（input/select）只做「确保选中」，不触发取消 */
+$('#tb').addEventListener('click', function(ev){
+  var tr = ev.target.closest ? ev.target.closest('tr') : null;
+  if (!tr || !tr.parentNode || tr.parentNode.id !== 'tb') return;
+  if (tr.querySelector('td.empty')) return;
+  var key = tr.getAttribute('data-key');
+  var isEdit = !!(ev.target.closest && ev.target.closest('input, select, button'));
+  var was = tr.classList.contains('row-sel');
+  if (isEdit){
+    if (was) return;                                   // 编辑控件点击：选中行保持，不做取消
+  } else if (was){
+    tr.classList.remove('row-sel'); ST.rowSelKey = null; return;
+  }
+  Array.prototype.forEach.call(this.children, function(r){ r.classList.remove('row-sel'); });
+  tr.classList.add('row-sel');
+  ST.rowSelKey = key;
+});
 
 /* ---------- 撤回：数据级操作前自动留快照，可回退最近 3 次（用户 2026-09-10） ---------- */
 var UNDO = { stack: [], MAX: 5 };
