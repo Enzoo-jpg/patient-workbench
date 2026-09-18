@@ -342,10 +342,10 @@
         <button type="button" class="sumBtn on" data-cy="0">本周</button>
         <button type="button" class="sumBtn" data-cy="1">下周</button>
       </span>
-      <span class="sumDaysLab">周期天数
-        <input type="number" id="sumDays" min="1" title="回购判定用的周期天数：默认取品种档案的每盒天数，可临时修改（仅影响小结统计，不改品种档案）"> 天
+      <span class="sumDaysLab">周期
+        <input type="date" id="sumFrom" title="统计周期起（可手工改任意区间，改完自动重算小结）"> ~
+        <input type="date" id="sumTo" title="统计周期止">
       </span>
-      <span class="sumRange" id="sumRange"></span>
       <span class="grow"></span>
       <button type="button" id="btnCopySum" class="sumCopy" title="复制小结文字，可直接粘贴到微信/群">复制小结</button>
     </div>
@@ -1581,16 +1581,28 @@ function saveSumManual(pid, o){
   try { localStorage.setItem('patient_workbench_summary_v2_' + pid, JSON.stringify(o)); } catch(e){}
 }
 function sumDaysVal(){
-  var def = curProduct() ? (curProduct().daysPerBox || 30) : 30;
-  var sm = sumManual(ST.pid);
-  return (sm.days && +sm.days > 0) ? +sm.days : def;
+  return curProduct() ? (curProduct().daysPerBox || 30) : 30;
+}
+function sumYmd(ms){
+  var d = new Date(ms);
+  return d.getFullYear() + '-' + (d.getMonth()+1 < 10 ? '0' : '') + (d.getMonth()+1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate();
 }
 function renderSummary(){
   var card = $('#sumCard'); if (!card) return;
   if (!ST.pool.length){ card.hidden = true; return; }
   card.hidden = false;
   var off = ST.sumCycle || 0;
-  var ws = sumWeekStart(off), we = ws + 7*86400000, nws = ws + 7*86400000;
+  var defWs = sumWeekStart(off), defLen = 7;
+  /* 周期区间：日期框当前值 > 手工持久化值(sm.cs/ce) > 按钮对应的标准周 */
+  var fromInp = $('#sumFrom'), toInp = $('#sumTo');
+  var sm = sumManual(ST.pid);
+  var sStr = fromInp.value || sm.cs || sumYmd(defWs);
+  var eStr = toInp.value || sm.ce || sumYmd(defWs + (defLen - 1)*86400000);
+  if (document.activeElement !== fromInp) fromInp.value = sStr;   // 输入中不被重置
+  if (document.activeElement !== toInp) toInp.value = eStr;
+  var ws = E.parseDateLike(sStr), we = E.parseDateLike(eStr) != null ? E.parseDateLike(eStr) + 86400000 : defWs + 7*86400000;
+  if (we <= ws) we = ws + 7*86400000;                             // 止早于起的保护
+  var len = we - ws;
   var lab = off === 0 ? '本周' : (off === -1 ? '上周' : '下周');
   var D = sumDaysVal() * 86400000;
   var due = 0, bought = 0, nextP = 0;
@@ -1606,25 +1618,21 @@ function renderSummary(){
     }
     if (hit){ due++; if (hb) bought++; }
     var eff = effNextMs(p);
-    if (eff >= nws && eff < nws + 7*86400000) nextP++;
+    if (eff >= we && eff < we + len) nextP++;      // 下一周期 = 紧跟自定义区间、等长的一段
   });
-  var sm = sumManual(ST.pid);
-  var kDue = 'due@'+ws, kBou = 'bought@'+ws, kPen = 'pen@'+ws, kR = 'rate@'+ws, kNext = 'next@'+nws;
+  sm = sumManual(ST.pid);
+  var kDue = 'due@'+ws, kBou = 'bought@'+ws, kPen = 'pen@'+ws, kR = 'rate@'+ws, kNext = 'next@'+we;
   var vDue = sm[kDue] != null ? sm[kDue] : due;
   var vBou = sm[kBou] != null ? sm[kBou] : bought;
   var vPen = sm[kPen] != null ? sm[kPen] : Math.max(0, vDue - vBou);
   var vNext = sm[kNext] != null ? sm[kNext] : nextP;
   var vRate = sm[kR] != null ? sm[kR] : (vDue > 0 ? Math.round(vBou / vDue * 100) : null);
-  $('#sumRange').textContent = lab + ' ' + sumMD(ws) + ' ~ ' + sumMD(we - 86400000) +
-    '（下一周期 ' + sumMD(nws) + ' ~ ' + sumMD(nws + 7*86400000 - 86400000) + '）';
-  var daysInp = $('#sumDays');
-  if (document.activeElement !== daysInp) daysInp.value = sumDaysVal();   // 输入中不被重置
   function sn(k, v, suf){ return '<span class="snum" data-sk="' + k + '" title="点击修改">' + v + (suf || '') + '</span>'; }
   $('#sumBody').innerHTML =
-    '<div><span class="sn">1.</span>' + lab + '应回购 ' + sn(kDue, vDue) + ' 人：已回购 ' + sn(kBou, vBou) +
+    '<div><span class="sn">1.</span>周期内（' + sumMD(ws) + ' ~ ' + sumMD(we - 86400000) + '）应回购 ' + sn(kDue, vDue) + ' 人：已回购 ' + sn(kBou, vBou) +
     ' 人、未回购 ' + sn(kPen, vPen) + ' 人；</div>' +
-    '<div><span class="sn">2.</span>' + lab + '回购率 ' + sn(kR, vRate == null ? '—' : vRate, '%') + '；</div>' +
-    '<div><span class="sn">3.</span>下一周期预计复购 ' + sn(kNext, vNext) + ' 人。</div>';
+    '<div><span class="sn">2.</span>周期回购率 ' + sn(kR, vRate == null ? '—' : vRate, '%') + '；</div>' +
+    '<div><span class="sn">3.</span>下一周期（' + sumMD(we) + ' ~ ' + sumMD(we + len - 86400000) + '）预计复购 ' + sn(kNext, vNext) + ' 人。</div>';
 }
 /* 指标卡下钻：点卡片 → 明细表按该条件筛选；再点一次取消 */
 function drill(what){
@@ -2623,19 +2631,26 @@ $('#tb').addEventListener('click', function(ev){
   ST.rowSelKey = key;
 });
 
-/* ---------- 整体小结：周期切换 + 数字人工修正 + 复制 ---------- */
+/* ---------- 整体小结：周期快捷填充/切换 + 数字人工修正 + 复制 ---------- */
 Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(b){
   b.onclick = function(){
     ST.sumCycle = +b.getAttribute('data-cy');
     Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(x){ x.classList.toggle('on', x === b); });
+    var off = ST.sumCycle, ws = sumWeekStart(off);
+    $('#sumFrom').value = sumYmd(ws);                          // 按钮 = 快捷填充标准周区间
+    $('#sumTo').value = sumYmd(ws + 6*86400000);
+    var sm = sumManual(ST.pid);
+    sm.cs = $('#sumFrom').value; sm.ce = $('#sumTo').value;
+    saveSumManual(ST.pid, sm);
     renderSummary();
   };
 });
-$('#sumDays').onchange = function(){
+$('#sumFrom').onchange = $('#sumTo').onchange = function(){
   var sm = sumManual(ST.pid);
-  if (this.value !== '' && +this.value > 0) sm.days = +this.value; else delete sm.days;
+  if (this.value) { this.id === 'sumFrom' ? sm.cs = this.value : sm.ce = this.value; }
+  else { this.id === 'sumFrom' ? delete sm.cs : delete sm.ce; }   // 清空 = 恢复标准周
   saveSumManual(ST.pid, sm);
-  renderSummary();                                   // 天数变化 → 按新周期重算回购
+  renderSummary();
 };
 $('#sumBody').addEventListener('click', function(ev){
   var sp = ev.target.closest ? ev.target.closest('.snum') : null;
@@ -2661,7 +2676,7 @@ $('#sumBody').addEventListener('click', function(ev){
   inp.onblur = function(){ done(true); };
 });
 $('#btnCopySum').onclick = function(){
-  var txt = '【整体小结 · ' + (curProduct() ? curProduct().label : '') + ' · ' + $('#sumRange').textContent + '】\n' + $('#sumBody').innerText;
+  var txt = '【整体小结 · ' + (curProduct() ? curProduct().label : '') + ' · 周期 ' + $('#sumFrom').value + ' ~ ' + $('#sumTo').value + '】\n' + $('#sumBody').innerText;
   var b = this;
   var oked = function(){ b.textContent = '已复制 ✓'; setTimeout(function(){ b.textContent = '复制小结'; }, 1500); };
   var fallback = function(){
