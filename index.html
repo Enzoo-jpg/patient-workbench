@@ -1639,19 +1639,19 @@ function renderSummary(){
   var detail = { due: [], bought: [], pen: [], next: [], cur: [], newP: [], old: [], dueNoBuy: [], buyNoDue: [] };   // 下钻明细
   pats.forEach(function(p){
     var times = p.buyMs || [];
-    var hit = false, hb = false, hitMs = null;
-    var inP = false, firstInP = null, lastInP = null;   // 本期购药（周期内有任意一次实际购药）
+    var hit = false, hb = false, hitMs = null, hitIdx = -1;
+    var inP = false, firstInP = null, lastInP = null, lastIdx = -1;   // 本期购药（周期内有任意一次实际购药）
     for (var i = 0; i < times.length; i++){
       var d2 = times[i] + D;                       // 该次购药的应回购日
       if (d2 >= ws && d2 < we){
         hit = true;
-        if (hitMs == null) hitMs = d2;
+        if (hitMs == null){ hitMs = d2; hitIdx = i; }
         if (i < times.length - 1) hb = true;       // 之后还有更晚购药 → 已回购
       }
       if (times[i] >= ws && times[i] < we){        // 实际购药落在周期内
         inP = true;
         if (firstInP == null) firstInP = times[i];
-        lastInP = times[i];
+        lastInP = times[i]; lastIdx = i;
       }
     }
     if (hit){
@@ -1663,9 +1663,16 @@ function renderSummary(){
       /* 新患 = 首次购药就在本周期；老患 = 周期前已建档（首购早于周期起点） */
       (times[0] >= ws ? detail.newP : detail.old).push({ p: p, refMs: firstInP });
     }
-    /* 差异指标（用户 2026-09-18 拍板）：定位提前/推迟购药人群 */
-    if (hit && hb && !inP) detail.dueNoBuy.push({ p: p, refMs: hitMs });          // 应回购日本期，但本期没来买（提前在上期买了）
-    if (inP && times[0] < ws && !hit) detail.buyNoDue.push({ p: p, refMs: lastInP });  // 本期买了但应回购日不在本期（提前买下期/脱落回归）
+    /* 差异指标（用户 2026-09-18 拍板）：定位提前/推迟购药人群，dev=实际购药-应回购（天，负=提前正=逾期） */
+    if (hit && hb && !inP){
+      detail.dueNoBuy.push({ p: p, refMs: hitMs, actMs: times[hitIdx + 1],
+        dev: Math.round((times[hitIdx + 1] - hitMs) / 86400000) });
+    }
+    if (inP && times[0] < ws && !hit){
+      var prevDue = times[lastIdx - 1] + D;        // 上一次购药对应的应回购日
+      detail.buyNoDue.push({ p: p, refMs: lastInP, dueMs: prevDue,
+        dev: Math.round((lastInP - prevDue) / 86400000) });
+    }
     var eff = effNextMs(p);
     if (eff >= we && eff < we + len) detail.next.push({ p: p, refMs: eff });   // 下一周期 = 紧跟自定义区间、等长的一段
   });
@@ -2736,6 +2743,10 @@ function sumRefHead(kind){
     : (kind === 'due' || kind === 'bought' || kind === 'pen' || kind === 'dueNoBuy') ? '应回购日'
     : '购药日期';
 }
+function devTxt(dev){
+  /* 购药节奏：负=提前正=逾期（天） */
+  return dev < 0 ? '提前 ' + (-dev) + ' 天' : dev > 0 ? '逾期 ' + dev + ' 天' : '准时';
+}
 function openSumDrill(kind, sk){
   var det = (ST.sumDetail || {})[kind] || [];
   var mask = $('#mask').checked;
@@ -2746,20 +2757,32 @@ function openSumDrill(kind, sk){
     ' · ' + (curProduct() ? curProduct().label : '') +
     ' · 名单遵循上方「姓名/电话脱敏」开关 · 点「保存修正」可人工改该人数（显示值优先于自动统计）';
   var refHead = sumRefHead(kind);
+  var withDev = kind === 'dueNoBuy' || kind === 'buyNoDue';      // 差异指标：多一列「购药节奏」
+  var cols = [refHead,'姓名','电话','末次购药','药房','医院'];
+  if (withDev) cols.push('购药节奏');
   var head = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
-    '<thead><tr>' + [refHead,'姓名','电话','末次购药','药房','医院'].map(function(h){
+    '<thead><tr>' + cols.map(function(h){
       return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);position:static">' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
   var body = det.slice().sort(function(a,b){ return a.refMs - b.refMs || (a.p.name < b.p.name ? -1 : 1); }).map(function(x){
     var p = x.p;
+    var devCell = '';
+    if (withDev){
+      var tip = kind === 'dueNoBuy'
+        ? '应回购 ' + E.fmtDate(x.refMs) + ' · 实际购药 ' + E.fmtDate(x.actMs)
+        : '应回购 ' + E.fmtDate(x.dueMs) + ' · 实际购药 ' + E.fmtDate(x.refMs);
+      var devCol = x.dev < 0 ? '#0F6E56' : x.dev > 0 ? '#A32D2D' : 'inherit';
+      devCell = '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6" title="' + tip + '">' +
+        '<span style="color:' + devCol + ';font-weight:500">' + devTxt(x.dev) + '</span></td>';
+    }
     return '<tr>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(x.refMs) + '</td>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) + '</td>' +
       '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskPhone(p.phone) : p.phone) + '</td>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(p.lastBuyMs) + '</td>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.store || '') + '</td>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.hospital || '') + '</td></tr>';
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.hospital || '') + '</td>' + devCell + '</tr>';
   }).join('');
-  $('#sumList').innerHTML = head + (body || '<tr><td colspan="6" style="padding:10px;color:var(--ink2)">无（该指标当前为 0 人）</td></tr>') + '</tbody></table>';
+  $('#sumList').innerHTML = head + (body || '<tr><td colspan="' + cols.length + '" style="padding:10px;color:var(--ink2)">无（该指标当前为 0 人）</td></tr>') + '</tbody></table>';
   var sm = sumManual(ST.pid);
   var shown = sm[sk] != null ? sm[sk] : auto;
   $('#sumFixVal').value = sm[sk] != null ? sm[sk] : '';
@@ -2817,7 +2840,9 @@ $('#sumExp').onclick = function(){
   var det = (ST.sumDetail || {})[ctx.kind] || [];
   if (!det.length){ alert('当前指标没有患者明细可导出。'); return; }
   var mask = $('#mask').checked;
+  var withDev = ctx.kind === 'dueNoBuy' || ctx.kind === 'buyNoDue';
   var head = [sumRefHead(ctx.kind), '患者姓名', '会员电话', '末次购药', '药房', '医院'];
+  if (withDev) head.push('购药节奏');
   var aoa = [head];
   det.slice().sort(function(a, b){ return a.refMs - b.refMs || (a.p.name < b.p.name ? -1 : 1); }).forEach(function(x){
     var p = x.p;
@@ -2829,6 +2854,7 @@ $('#sumExp').onclick = function(){
       p.store || '',
       p.hospital || ''
     ]);
+    if (withDev) aoa[aoa.length - 1].push(devTxt(x.dev));
   });
   var ws2 = XLSX.utils.aoa_to_sheet(aoa);
   var wb = XLSX.utils.book_new();
@@ -2903,7 +2929,7 @@ var NOTICE = {
   date: '2026-09-18',
   sum: '小结新增购药节奏差异指标：已回购但本期未购 / 本期购药但非本期到期',
   items: [
-    '🔄 <b>小结新增差异指标</b>：已回购但本期未购（提前在上期买了）、本期购药但非本期到期（提前买下期/脱落回归）——两个人数合计即「购药节奏偏离理论周期」的规模，均可点击下钻看明细',
+    '🔄 <b>小结新增差异指标</b>：已回购但本期未购（提前在上期买了）、本期购药但非本期到期（提前买下期/脱落回归）——两个人数合计即「购药节奏偏离理论周期」的规模，均可点击下钻看明细，差异明细含「购药节奏」列（提前 X 天 / 逾期 X 天）',
     '📅 <b>明细筛选新增「首购日期」</b>：按患者首次购药日期起止区间筛选，核查新患/老患更方便；与状态/药房/医院等筛选可叠加，切品种或换底表时自动清空',
     '👥 <b>小结新增本期购药拆分</b>：本期购药人数 = 新患（首次购药在本期）+ 老患（本期前已建档），三个数字均可点击下钻明细、弹窗导出名单',
     '🔎 <b>小结人数可下钻</b>：点应回购/已回购/未回购/预计复购的橙色数字，弹出该指标的患者明细（应回购日/姓名/电话/末次购药/药房/医院），人工修正入口移入弹窗',
