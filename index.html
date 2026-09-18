@@ -125,6 +125,10 @@
     background:var(--card);color:var(--ink2);cursor:pointer}
   .sumBtn.on{background:var(--violet);border-color:var(--violet);color:#fff}
   .sumRange{font-size:12.5px;color:var(--ink2)}
+  .sumDaysLab{font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:4px}
+  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:var(--violet);font-weight:700;
+    border:1px solid var(--line);border-radius:6px;padding:2px 4px;text-align:center;background:#fff}
+  .sumDaysLab input:focus{outline:none;border-color:var(--violet)}
   .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid var(--violet);
     background:var(--violet-l);color:var(--violet);cursor:pointer}
   .sumCopy:hover{background:var(--violet);color:#fff}
@@ -337,6 +341,9 @@
         <button type="button" class="sumBtn" data-cy="-1">上周</button>
         <button type="button" class="sumBtn on" data-cy="0">本周</button>
         <button type="button" class="sumBtn" data-cy="1">下周</button>
+      </span>
+      <span class="sumDaysLab">周期天数
+        <input type="number" id="sumDays" min="1" title="回购判定用的周期天数：默认取品种档案的每盒天数，可临时修改（仅影响小结统计，不改品种档案）"> 天
       </span>
       <span class="sumRange" id="sumRange"></span>
       <span class="grow"></span>
@@ -643,6 +650,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         ageBest: ageBest,
         firstBuyMs: first,
         lastBuyMs: last,
+        buyMs: items.map(function (x) { return x.ms; }),   // 全部购药时间升序（小结按历史序列判回购，2026-09-18）
         nextMs: nextMs,
         totalQty: totalQty,
         lastQty: lastQty,
@@ -1549,11 +1557,13 @@ function kpi(cls, lb, vl, ex, drill, active, tip){
 }
 
 /* ---------- 整体小结（2026-09-18）：自动统计 + 橙色数字人工可改 + 一键复制 ----------
-   口径（用户拍板）：
-   · 应回购 = 实际下次购药（人工填）优先、回退理论下次购药，落在所选周期内
-   · 已回购 = 该患者末次购药记录落在所选周期内；未回购 = 应回购 - 已回购
-   · 原因细分 v1 暂不接随访数据；「下一周期预计复购」= 下一周期内有效下次购药日期人数
-   · 橙色数字点击可人工修正，按「品种+指标+周期」存本机，人工值优先于自动统计 */
+   口径 v2（用户 2026-09-18 修正：v1 用当前 nextMs 判应回购，患者回购后 nextMs 自动后移，
+   应回购集合天然排除了已回购者 → 永远算出已回购 0）：
+   · 应回购 = 历史购药序列中存在某次购药 t_i + 周期天数 落在所选周期内
+   · 已回购 = 该到期事件发生时患者之后还有更晚的购药记录（i 非末次）；未回购 = 到期时已是末次
+   · 周期天数 = 小结卡片手工输入（默认品种档案每盒天数，仅影响小结统计）
+   · 下一周期预计复购 = 实际下次购药（人工填）优先回退理论，落在下一周期内（预测未来用最新状态）
+   · 原因细分 v1 暂不接随访数据；橙色数字点击人工修正，按「品种+指标+周期」存本机 */
 function sumWeekStart(off){
   var d = new Date(); d.setHours(0,0,0,0);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + off * 7);   // 周一为一周开始
@@ -1570,6 +1580,11 @@ function sumManual(pid){
 function saveSumManual(pid, o){
   try { localStorage.setItem('patient_workbench_summary_v2_' + pid, JSON.stringify(o)); } catch(e){}
 }
+function sumDaysVal(){
+  var def = curProduct() ? (curProduct().daysPerBox || 30) : 30;
+  var sm = sumManual(ST.pid);
+  return (sm.days && +sm.days > 0) ? +sm.days : def;
+}
 function renderSummary(){
   var card = $('#sumCard'); if (!card) return;
   if (!ST.pool.length){ card.hidden = true; return; }
@@ -1577,10 +1592,20 @@ function renderSummary(){
   var off = ST.sumCycle || 0;
   var ws = sumWeekStart(off), we = ws + 7*86400000, nws = ws + 7*86400000;
   var lab = off === 0 ? '本周' : (off === -1 ? '上周' : '下周');
+  var D = sumDaysVal() * 86400000;
   var due = 0, bought = 0, nextP = 0;
   (ST.result.patients || []).forEach(function(p){
+    var times = p.buyMs || [];
+    var hit = false, hb = false;
+    for (var i = 0; i < times.length; i++){
+      var d2 = times[i] + D;                       // 该次购药的应回购日
+      if (d2 >= ws && d2 < we){
+        hit = true;
+        if (i < times.length - 1) hb = true;       // 之后还有更晚购药 → 已回购
+      }
+    }
+    if (hit){ due++; if (hb) bought++; }
     var eff = effNextMs(p);
-    if (eff >= ws && eff < we){ due++; if (p.lastBuyMs >= ws && p.lastBuyMs < we) bought++; }
     if (eff >= nws && eff < nws + 7*86400000) nextP++;
   });
   var sm = sumManual(ST.pid);
@@ -1592,6 +1617,8 @@ function renderSummary(){
   var vRate = sm[kR] != null ? sm[kR] : (vDue > 0 ? Math.round(vBou / vDue * 100) : null);
   $('#sumRange').textContent = lab + ' ' + sumMD(ws) + ' ~ ' + sumMD(we - 86400000) +
     '（下一周期 ' + sumMD(nws) + ' ~ ' + sumMD(nws + 7*86400000 - 86400000) + '）';
+  var daysInp = $('#sumDays');
+  if (document.activeElement !== daysInp) daysInp.value = sumDaysVal();   // 输入中不被重置
   function sn(k, v, suf){ return '<span class="snum" data-sk="' + k + '" title="点击修改">' + v + (suf || '') + '</span>'; }
   $('#sumBody').innerHTML =
     '<div><span class="sn">1.</span>' + lab + '应回购 ' + sn(kDue, vDue) + ' 人：已回购 ' + sn(kBou, vBou) +
@@ -2604,6 +2631,12 @@ Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(b){
     renderSummary();
   };
 });
+$('#sumDays').onchange = function(){
+  var sm = sumManual(ST.pid);
+  if (this.value !== '' && +this.value > 0) sm.days = +this.value; else delete sm.days;
+  saveSumManual(ST.pid, sm);
+  renderSummary();                                   // 天数变化 → 按新周期重算回购
+};
 $('#sumBody').addEventListener('click', function(ev){
   var sp = ev.target.closest ? ev.target.closest('.snum') : null;
   if (!sp || sp.querySelector('input')) return;
