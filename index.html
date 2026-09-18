@@ -1636,7 +1636,7 @@ function renderSummary(){
   /* 跟随看板药房筛选（dStore）：与 KPI/明细表同一份过滤口径（用户 2026-09-18） */
   var ds = $('#dStore').value;
   var pats = (ST.result.patients || []).filter(function(p){ return !ds || p.store === ds; });
-  var detail = { due: [], bought: [], pen: [], next: [], cur: [], newP: [], old: [] };   // 下钻明细
+  var detail = { due: [], bought: [], pen: [], next: [], cur: [], newP: [], old: [], dueNoBuy: [], buyNoDue: [] };   // 下钻明细
   pats.forEach(function(p){
     var times = p.buyMs || [];
     var hit = false, hb = false, hitMs = null;
@@ -1663,6 +1663,9 @@ function renderSummary(){
       /* 新患 = 首次购药就在本周期；老患 = 周期前已建档（首购早于周期起点） */
       (times[0] >= ws ? detail.newP : detail.old).push({ p: p, refMs: firstInP });
     }
+    /* 差异指标（用户 2026-09-18 拍板）：定位提前/推迟购药人群 */
+    if (hit && hb && !inP) detail.dueNoBuy.push({ p: p, refMs: hitMs });          // 应回购日本期，但本期没来买（提前在上期买了）
+    if (inP && times[0] < ws && !hit) detail.buyNoDue.push({ p: p, refMs: lastInP });  // 本期买了但应回购日不在本期（提前买下期/脱落回归）
     var eff = effNextMs(p);
     if (eff >= we && eff < we + len) detail.next.push({ p: p, refMs: eff });   // 下一周期 = 紧跟自定义区间、等长的一段
   });
@@ -1671,6 +1674,7 @@ function renderSummary(){
   ST.sumDetail = detail;
   var kDue = 'due@'+ws, kBou = 'bought@'+ws, kPen = 'pen@'+ws, kR = 'rate@'+ws, kNext = 'next@'+we;
   var kCur = 'cur@'+ws, kNew = 'newP@'+ws, kOld = 'old@'+ws;
+  var kDnb = 'dueNoBuy@'+ws, kBnd = 'buyNoDue@'+ws;
   var vDue = sm[kDue] != null ? sm[kDue] : due;
   var vBou = sm[kBou] != null ? sm[kBou] : bought;
   var vPen = sm[kPen] != null ? sm[kPen] : Math.max(0, vDue - vBou);
@@ -1679,6 +1683,8 @@ function renderSummary(){
   var vCur = sm[kCur] != null ? sm[kCur] : curN;
   var vNew = sm[kNew] != null ? sm[kNew] : newN;
   var vOld = sm[kOld] != null ? sm[kOld] : oldN;
+  var vDnb = sm[kDnb] != null ? sm[kDnb] : detail.dueNoBuy.length;
+  var vBnd = sm[kBnd] != null ? sm[kBnd] : detail.buyNoDue.length;
   function sn(k, v, suf, drill){
     return '<span class="snum" data-sk="' + k + '"' + (drill ? ' data-drill="1" title="点击查看患者明细"' : ' title="点击修改"') + '>' + v + (suf || '') + '</span>';
   }
@@ -1689,6 +1695,7 @@ function renderSummary(){
     '<div><span class="sn">3.</span>本期购药 ' + sn(kCur, vCur, '', true) + ' 人：新患 ' + sn(kNew, vNew, '', true) +
     ' 人、老患 ' + sn(kOld, vOld, '', true) + ' 人；</div>' +
     '<div><span class="sn">4.</span>下一周期（' + sumMD(we) + ' ~ ' + sumMD(we + len - 86400000) + '）预计复购 ' + sn(kNext, vNext, '', true) + ' 人。</div>' +
+    '<div><span class="sn">5.</span>差异：已回购但本期未购 ' + sn(kDnb, vDnb, '', true) + ' 人、本期购药但非本期到期 ' + sn(kBnd, vBnd, '', true) + ' 人（= 提前/推迟购药人群）。</div>' +
     (ds ? '<div style="font-size:12px;color:var(--ink2)">已按药房「' + esc(ds) + '」筛选（切换/清除见看板顶部药房切换器）</div>' : '');
 }
 /* 指标卡下钻：点卡片 → 明细表按该条件筛选；再点一次取消 */
@@ -2722,10 +2729,12 @@ $('#sumBody').addEventListener('click', function(ev){
   }
   openSumDrill(sk.split('@')[0], sk);
 });
-var SUM_KINDS = { due: '应回购', bought: '已回购', pen: '未回购', cur: '本期购药', newP: '本期新患', old: '本期老患', next: '下一周期预计复购' };
+var SUM_KINDS = { due: '应回购', bought: '已回购', pen: '未回购', cur: '本期购药', newP: '本期新患', old: '本期老患', dueNoBuy: '已回购但本期未购', buyNoDue: '本期购药但非本期到期', next: '下一周期预计复购' };
 function sumRefHead(kind){
-  /* next=预测未来复购日；due/bought/pen=应回购日；cur/newP/old=实际购药日 */
-  return kind === 'next' ? '预计复购日' : (kind === 'due' || kind === 'bought' || kind === 'pen') ? '应回购日' : '购药日期';
+  /* next=预测未来复购日；due/bought/pen/dueNoBuy=应回购日；cur/newP/old/buyNoDue=实际购药日 */
+  return kind === 'next' ? '预计复购日'
+    : (kind === 'due' || kind === 'bought' || kind === 'pen' || kind === 'dueNoBuy') ? '应回购日'
+    : '购药日期';
 }
 function openSumDrill(kind, sk){
   var det = (ST.sumDetail || {})[kind] || [];
@@ -2890,10 +2899,11 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260918d',
+  ver: 'v20260918e',
   date: '2026-09-18',
-  sum: '明细筛选栏新增首购日期区间筛选',
+  sum: '小结新增购药节奏差异指标：已回购但本期未购 / 本期购药但非本期到期',
   items: [
+    '🔄 <b>小结新增差异指标</b>：已回购但本期未购（提前在上期买了）、本期购药但非本期到期（提前买下期/脱落回归）——两个人数合计即「购药节奏偏离理论周期」的规模，均可点击下钻看明细',
     '📅 <b>明细筛选新增「首购日期」</b>：按患者首次购药日期起止区间筛选，核查新患/老患更方便；与状态/药房/医院等筛选可叠加，切品种或换底表时自动清空',
     '👥 <b>小结新增本期购药拆分</b>：本期购药人数 = 新患（首次购药在本期）+ 老患（本期前已建档），三个数字均可点击下钻明细、弹窗导出名单',
     '🔎 <b>小结人数可下钻</b>：点应回购/已回购/未回购/预计复购的橙色数字，弹出该指标的患者明细（应回购日/姓名/电话/末次购药/药房/医院），人工修正入口移入弹窗',
