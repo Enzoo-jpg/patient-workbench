@@ -367,6 +367,7 @@
         <button type="button" id="sumFixOk" class="pri" style="font-size:12px;padding:4px 12px">保存修正</button>
         <button type="button" id="sumFixClear" style="font-size:12px;padding:4px 12px">恢复自动统计</button>
         <span class="grow"></span>
+        <button type="button" id="sumExp" title="导出当前指标的患者名单为 Excel（姓名/电话跟随脱敏开关）">导出名单</button>
         <button type="button" id="sumClose" style="font-size:12px;padding:4px 12px">关闭</button>
       </div>
     </div>
@@ -2695,6 +2696,7 @@ function openSumDrill(kind, sk){
   var det = (ST.sumDetail || {})[kind] || [];
   var mask = $('#mask').checked;
   var auto = det.length;
+  ST.sumDrillCtx = { kind: kind, sk: sk };                       // 导出/脱敏实时刷新用
   $('#sumDrillTitle').textContent = SUM_KINDS[kind] + '患者明细（' + auto + ' 人）';
   $('#sumDrillSub').textContent = '周期 ' + $('#sumFrom').value + ' ~ ' + $('#sumTo').value +
     ' · ' + (curProduct() ? curProduct().label : '') +
@@ -2764,6 +2766,35 @@ $('#sumFixClear').onclick = function(){
 };
 $('#sumClose').onclick = function(){ $('#sumOvl').hidden = true; };
 $('#sumOvl').addEventListener('click', function(ev){ if (ev.target === this) this.hidden = true; });
+/* 导出当前下钻名单：姓名/电话实时跟随「姓名/电话脱敏」开关（用户 2026-09-18） */
+$('#sumExp').onclick = function(){
+  var ctx = ST.sumDrillCtx;
+  if (!ctx) return;
+  var det = (ST.sumDetail || {})[ctx.kind] || [];
+  if (!det.length){ alert('当前指标没有患者明细可导出。'); return; }
+  var mask = $('#mask').checked;
+  var head = [(ctx.kind === 'next' ? '预计复购日' : '应回购日'), '患者姓名', '会员电话', '末次购药', '药房', '医院'];
+  var aoa = [head];
+  det.slice().sort(function(a, b){ return a.refMs - b.refMs || (a.p.name < b.p.name ? -1 : 1); }).forEach(function(x){
+    var p = x.p;
+    aoa.push([
+      E.fmtDate(x.refMs),
+      mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : '')),
+      mask ? maskPhone(p.phone) : p.phone,
+      E.fmtDate(p.lastBuyMs),
+      p.store || '',
+      p.hospital || ''
+    ]);
+  });
+  var ws2 = XLSX.utils.aoa_to_sheet(aoa);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws2, '患者名单');
+  XLSX.writeFile(wb, SUM_KINDS[ctx.kind] + '名单_' + (curProduct() ? curProduct().label.split('（')[0] : '患者') + '_' + stamp() + '.xlsx');
+};
+/* 弹窗开着时切换脱敏开关 → 明细即时重渲染 */
+$('#mask').addEventListener('change', function(){
+  if (!$('#sumOvl').hidden && ST.sumDrillCtx) openSumDrill(ST.sumDrillCtx.kind, ST.sumDrillCtx.sk);
+});
 $('#btnCopySum').onclick = function(){
   var txt = '【整体小结 · ' + (curProduct() ? curProduct().label : '') + ' · 周期 ' + $('#sumFrom').value + ' ~ ' + $('#sumTo').value + '】\n' + $('#sumBody').innerText;
   var b = this;
