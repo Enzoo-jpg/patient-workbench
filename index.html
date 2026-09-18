@@ -355,6 +355,23 @@
 
   <div class="dist" id="dist"></div>
 
+  <!-- 小结下钻：人数 → 患者明细（2026-09-18） -->
+  <div class="ovl" id="sumOvl" hidden>
+    <div class="mcard" style="max-width:760px">
+      <h3 id="sumDrillTitle">明细</h3>
+      <div class="msub" id="sumDrillSub"></div>
+      <div id="sumList" style="max-height:52vh;overflow:auto"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+        <span style="font-size:12.5px;color:var(--ink2)">人工修正该人数：</span>
+        <input type="number" id="sumFixVal" style="width:76px;font:inherit;padding:3px 6px;border:1px solid var(--line);border-radius:6px">
+        <button type="button" id="sumFixOk" class="pri" style="font-size:12px;padding:4px 12px">保存修正</button>
+        <button type="button" id="sumFixClear" style="font-size:12px;padding:4px 12px">恢复自动统计</button>
+        <span class="grow"></span>
+        <button type="button" id="sumClose" style="font-size:12px;padding:4px 12px">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <details id="quality">
     <summary>数据质量与建档异常 <span id="qbadge"></span></summary>
     <div class="qbody" id="qbody"></div>
@@ -1603,36 +1620,46 @@ function renderSummary(){
   var ws = E.parseDateLike(sStr), we = E.parseDateLike(eStr) != null ? E.parseDateLike(eStr) + 86400000 : defWs + 7*86400000;
   if (we <= ws) we = ws + 7*86400000;                             // 止早于起的保护
   var len = we - ws;
-  var lab = off === 0 ? '本周' : (off === -1 ? '上周' : '下周');
   var D = sumDaysVal() * 86400000;
-  var due = 0, bought = 0, nextP = 0;
-  (ST.result.patients || []).forEach(function(p){
+  /* 跟随看板药房筛选（dStore）：与 KPI/明细表同一份过滤口径（用户 2026-09-18） */
+  var ds = $('#dStore').value;
+  var pats = (ST.result.patients || []).filter(function(p){ return !ds || p.store === ds; });
+  var detail = { due: [], bought: [], pen: [], next: [] };        // 下钻明细
+  pats.forEach(function(p){
     var times = p.buyMs || [];
-    var hit = false, hb = false;
+    var hit = false, hb = false, hitMs = null;
     for (var i = 0; i < times.length; i++){
       var d2 = times[i] + D;                       // 该次购药的应回购日
       if (d2 >= ws && d2 < we){
         hit = true;
+        if (hitMs == null) hitMs = d2;
         if (i < times.length - 1) hb = true;       // 之后还有更晚购药 → 已回购
       }
     }
-    if (hit){ due++; if (hb) bought++; }
+    if (hit){
+      detail.due.push({ p: p, refMs: hitMs });
+      (hb ? detail.bought : detail.pen).push({ p: p, refMs: hitMs });
+    }
     var eff = effNextMs(p);
-    if (eff >= we && eff < we + len) nextP++;      // 下一周期 = 紧跟自定义区间、等长的一段
+    if (eff >= we && eff < we + len) detail.next.push({ p: p, refMs: eff });   // 下一周期 = 紧跟自定义区间、等长的一段
   });
-  sm = sumManual(ST.pid);
+  var due = detail.due.length, bought = detail.bought.length, nextP = detail.next.length;
+  ST.sumDetail = detail;
   var kDue = 'due@'+ws, kBou = 'bought@'+ws, kPen = 'pen@'+ws, kR = 'rate@'+ws, kNext = 'next@'+we;
   var vDue = sm[kDue] != null ? sm[kDue] : due;
   var vBou = sm[kBou] != null ? sm[kBou] : bought;
   var vPen = sm[kPen] != null ? sm[kPen] : Math.max(0, vDue - vBou);
   var vNext = sm[kNext] != null ? sm[kNext] : nextP;
   var vRate = sm[kR] != null ? sm[kR] : (vDue > 0 ? Math.round(vBou / vDue * 100) : null);
-  function sn(k, v, suf){ return '<span class="snum" data-sk="' + k + '" title="点击修改">' + v + (suf || '') + '</span>'; }
+  function sn(k, v, suf, drill){
+    return '<span class="snum" data-sk="' + k + '"' + (drill ? ' data-drill="1" title="点击查看患者明细"' : ' title="点击修改"') + '>' + v + (suf || '') + '</span>';
+  }
   $('#sumBody').innerHTML =
-    '<div><span class="sn">1.</span>周期内（' + sumMD(ws) + ' ~ ' + sumMD(we - 86400000) + '）应回购 ' + sn(kDue, vDue) + ' 人：已回购 ' + sn(kBou, vBou) +
-    ' 人、未回购 ' + sn(kPen, vPen) + ' 人；</div>' +
+    '<div><span class="sn">1.</span>周期内（' + sumMD(ws) + ' ~ ' + sumMD(we - 86400000) + '）应回购 ' + sn(kDue, vDue, '', true) + ' 人：已回购 ' + sn(kBou, vBou, '', true) +
+    ' 人、未回购 ' + sn(kPen, vPen, '', true) + ' 人；</div>' +
     '<div><span class="sn">2.</span>周期回购率 ' + sn(kR, vRate == null ? '—' : vRate, '%') + '；</div>' +
-    '<div><span class="sn">3.</span>下一周期（' + sumMD(we) + ' ~ ' + sumMD(we + len - 86400000) + '）预计复购 ' + sn(kNext, vNext) + ' 人。</div>';
+    '<div><span class="sn">3.</span>下一周期（' + sumMD(we) + ' ~ ' + sumMD(we + len - 86400000) + '）预计复购 ' + sn(kNext, vNext, '', true) + ' 人。</div>' +
+    (ds ? '<div style="font-size:12px;color:var(--ink2)">已按药房「' + esc(ds) + '」筛选（切换/清除见看板顶部药房切换器）</div>' : '');
 }
 /* 指标卡下钻：点卡片 → 明细表按该条件筛选；再点一次取消 */
 function drill(what){
@@ -2656,17 +2683,59 @@ $('#sumBody').addEventListener('click', function(ev){
   var sp = ev.target.closest ? ev.target.closest('.snum') : null;
   if (!sp || sp.querySelector('input')) return;
   var sk = sp.getAttribute('data-sk');
-  var cur = sp.textContent.replace(/[^0-9.\-]/g, '');
+  /* 回购率 = 比率无明细，走行内编辑；其余四个人数 → 下钻患者明细弹窗 */
+  if (sk.indexOf('rate@') === 0){
+    openSumFix(sk, sp.textContent.replace(/[^0-9.\-]/g, ''));
+    return;
+  }
+  openSumDrill(sk.split('@')[0], sk);
+});
+var SUM_KINDS = { due: '应回购', bought: '已回购', pen: '未回购', next: '下一周期预计复购' };
+function openSumDrill(kind, sk){
+  var det = (ST.sumDetail || {})[kind] || [];
+  var mask = $('#mask').checked;
+  var auto = det.length;
+  $('#sumDrillTitle').textContent = SUM_KINDS[kind] + '患者明细（' + auto + ' 人）';
+  $('#sumDrillSub').textContent = '周期 ' + $('#sumFrom').value + ' ~ ' + $('#sumTo').value +
+    ' · ' + (curProduct() ? curProduct().label : '') +
+    ' · 名单遵循上方「姓名/电话脱敏」开关 · 点「保存修正」可人工改该人数（显示值优先于自动统计）';
+  var refHead = kind === 'next' ? '预计复购日' : '应回购日';
+  var head = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<thead><tr>' + [refHead,'姓名','电话','末次购药','药房','医院'].map(function(h){
+      return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);position:static">' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
+  var body = det.slice().sort(function(a,b){ return a.refMs - b.refMs || (a.p.name < b.p.name ? -1 : 1); }).map(function(x){
+    var p = x.p;
+    return '<tr>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(x.refMs) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) + '</td>' +
+      '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskPhone(p.phone) : p.phone) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(p.lastBuyMs) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.store || '') + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.hospital || '') + '</td></tr>';
+  }).join('');
+  $('#sumList').innerHTML = head + (body || '<tr><td colspan="6" style="padding:10px;color:var(--ink2)">无（该指标当前为 0 人）</td></tr>') + '</tbody></table>';
+  var sm = sumManual(ST.pid);
+  var shown = sm[sk] != null ? sm[sk] : auto;
+  $('#sumFixVal').value = sm[sk] != null ? sm[sk] : '';
+  $('#sumFixVal').setAttribute('data-sk', sk);
+  $('#sumFixVal').setAttribute('data-auto', auto);
+  $('#sumFixVal').placeholder = '自动值 ' + auto;
+  $('#sumOvl').hidden = false;
+}
+function openSumFix(sk, curText){
+  /* 回购率行内编辑（比率无明细） */
+  var sp = document.querySelector('#sumBody .snum[data-sk="' + sk + '"]');
+  if (!sp) return;
+  var cur = curText.replace(/[^0-9.\-]/g, '');
   sp.innerHTML = '<input type="number" value="' + cur + '">';
   var inp = sp.querySelector('input');
   inp.focus(); inp.select();
   var ended = false;
-  var done = function(save){                              // true=保存(含清空=恢复自动值)；false=Esc 取消编辑
+  var done = function(save){
     if (ended) return; ended = true;
-    if (save === false){ renderSummary(); return; }
-    var sm = sumManual(ST.pid);
-    if (save && inp.value !== '' && isFinite(+inp.value)) sm[sk] = +inp.value; else delete sm[sk];
-    saveSumManual(ST.pid, sm);
+    var sm2 = sumManual(ST.pid);
+    if (save && inp.value !== '' && isFinite(+inp.value)) sm2[sk] = +inp.value; else delete sm2[sk];
+    saveSumManual(ST.pid, sm2);
     renderSummary();
   };
   inp.onkeydown = function(e){
@@ -2674,7 +2743,27 @@ $('#sumBody').addEventListener('click', function(ev){
     else if (e.key === 'Escape') done(false);
   };
   inp.onblur = function(){ done(true); };
-});
+}
+$('#sumFixOk').onclick = function(){
+  var v = $('#sumFixVal'), sk = v.getAttribute('data-sk');
+  if (!sk) return;
+  var sm2 = sumManual(ST.pid);
+  if (v.value !== '' && isFinite(+v.value)) sm2[sk] = +v.value; else delete sm2[sk];
+  saveSumManual(ST.pid, sm2);
+  renderSummary();
+  $('#sumOvl').hidden = true;
+};
+$('#sumFixClear').onclick = function(){
+  var v = $('#sumFixVal'), sk = v.getAttribute('data-sk');
+  if (!sk) return;
+  var sm2 = sumManual(ST.pid);
+  delete sm2[sk];
+  saveSumManual(ST.pid, sm2);
+  renderSummary();
+  $('#sumOvl').hidden = true;
+};
+$('#sumClose').onclick = function(){ $('#sumOvl').hidden = true; };
+$('#sumOvl').addEventListener('click', function(ev){ if (ev.target === this) this.hidden = true; });
 $('#btnCopySum').onclick = function(){
   var txt = '【整体小结 · ' + (curProduct() ? curProduct().label : '') + ' · 周期 ' + $('#sumFrom').value + ' ~ ' + $('#sumTo').value + '】\n' + $('#sumBody').innerText;
   var b = this;
@@ -2735,11 +2824,13 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260918a',
+  ver: 'v20260918b',
   date: '2026-09-18',
-  sum: '新增「整体小结」：自动统计本周回购情况，橙色数字可人工修正，一键复制',
+  sum: '小结人数可下钻看患者明细，并跟随看板药房筛选联动',
   items: [
-    '📋 <b>新增「整体小结」</b>：KPI 下方自动生成本周应回购/已回购/未回购/回购率/下周预计复购，周期可切上周/本周/下周；橙色数字点击即可人工修正（清空回车恢复自动值），一键复制成文字可直接粘贴到微信',
+    '🔎 <b>小结人数可下钻</b>：点应回购/已回购/未回购/预计复购的橙色数字，弹出该指标的患者明细（应回购日/姓名/电话/末次购药/药房/医院），人工修正入口移入弹窗',
+    '🏪 <b>小结跟随药房筛选</b>：看板顶部药房切换器选定后，小结四项统计同步只算该药房（界面有筛选提示）',
+    '📋 <b>新增「整体小结」</b>：自动统计本周应回购/已回购/未回购/回购率/下周预计复购，周期区间可手工改任意日期；橙色数字人工修正随备份走，一键复制成文字',
     '🧬 <b>新品种半自动建档</b>：导入底表遇到未建档品种不再跳过，弹窗预填显示名/识别词，确认后自动建池入库；每盒天数手动填写（默认 30）',
     '🗂 <b>新增「品种管理」</b>：动态品种可改名 / 改每盒天数 / 改识别词 / 删除（内置四品种只读）；改周期后全池自动重算',
     '📥 <b>随访导入按品种自动分拣</b>：混品种任务表一次导入，各品种池分别聚合匹配（无需切换品种重复导入）；未建档品种任务自动跳过并注明',
