@@ -388,6 +388,9 @@
       <label class="dr">理论下次购药
         <input type="date" id="fWinFrom" placeholder="起"> ～ <input type="date" id="fWinTo" placeholder="止">
       </label>
+      <label class="dr" title="按患者首次购药日期筛选（新患/老患核查常用）">首购日期
+        <input type="date" id="fFirstFrom" placeholder="起"> ～ <input type="date" id="fFirstTo" placeholder="止">
+      </label>
       <select id="fFill">
         <option value="">全部填写状态</option>
         <option value="todo">临床诊断待填</option>
@@ -916,7 +919,7 @@ function switchProduct(pid){
   try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
   ST.result = null; ST.importMsg = '';
   /* 换品种后重置筛选，避免沿用上个品种 */
-  ['#q','#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFill','#fNote','#dStore'].forEach(function(s){
+  ['#q','#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNote','#dStore'].forEach(function(s){
     var el = $(s); if (el) el.value = '';
   });
 }
@@ -1424,6 +1427,11 @@ function filtered(){
   var fromMs = fFrom ? E.parseDateLike(fFrom) : null;
   var toMs   = fTo   ? E.parseDateLike(fTo) : null;
   if (toMs != null) toMs = toMs + 86400000 - 1;          // 含当天 23:59:59.999
+  /* 首购日期区间：同上口径，比较引擎算出的首次购药 firstBuyMs */
+  var fF1 = $('#fFirstFrom').value, fF2 = $('#fFirstTo').value;
+  var f1Ms = fF1 ? E.parseDateLike(fF1) : null;
+  var f2Ms = fF2 ? E.parseDateLike(fF2) : null;
+  if (f2Ms != null) f2Ms = f2Ms + 86400000 - 1;
 
   var list = ST.result.patients.filter(function(p){
     if (fs && effStatus(p) !== fs) return false;
@@ -1431,6 +1439,8 @@ function filtered(){
     if (fh && p.hospital !== fh) return false;
     if (fromMs != null && p.nextMs < fromMs) return false;
     if (toMs != null && p.nextMs > toMs) return false;
+    if (f1Ms != null && p.firstBuyMs < f1Ms) return false;
+    if (f2Ms != null && p.firstBuyMs > f2Ms) return false;
     if (q){
       var hay = (p.name+' '+p.phone+' '+p.doctor+' '+p.hospital+' '+(p.dept||'')+' '+p.diagSrc).toLowerCase();
       /* 打码形式（张* 、153****1234）任何时候都可搜——不依赖脱敏开关，界面显示与否都能按打码形式检索 */
@@ -1529,7 +1539,8 @@ function render(){
 
   var fS = $('#fStatus').value, fF = $('#fFill').value, fN = $('#fNote').value;
   var hasFilter = !!(fS || fF || fN || $('#fStore').value || $('#fHosp').value ||
-                     $('#fWinFrom').value || $('#fWinTo').value || ($('#q').value || '').trim());
+                     $('#fWinFrom').value || $('#fWinTo').value ||
+                     $('#fFirstFrom').value || $('#fFirstTo').value || ($('#q').value || '').trim());
   var sourceDiag = curProduct() && curProduct().diagMode === 'source';
   var diagKpiLabel = sourceDiag ? '适应症缺失' : '临床诊断待填';
   var diagDoneTxt  = sourceDiag ? '点击查看有适应症患者' : '点击筛选';
@@ -1685,6 +1696,7 @@ function drill(what){
   if (what === 'all'){
     $('#fStatus').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
     $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#dStore').value = '';
+    $('#fFirstFrom').value = ''; $('#fFirstTo').value = '';
     $('#q').value = '';
     syncAllSsel();   // 可搜索下拉按钮文字同步
     render(); renderTable();
@@ -2326,7 +2338,8 @@ function applyLoaded(name, parsed){
   ST.fmap = parsed.fmap || {};
   /* 切换文件时重置筛选，避免沿用旧选项 */
   $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = ''; $('#dStore').value = '';
-  $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
+  $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = '';
+  $('#fFirstFrom').value = ''; $('#fFirstTo').value = ''; $('#fFill').value = ''; $('#fNote').value = '';
   syncAllSsel();   // 可搜索下拉按钮文字同步
   $('#drop').hidden = true;
   $('#app').hidden = false;
@@ -2619,7 +2632,7 @@ $('#fuFile').onchange = function(){
 $('#mask').onchange = renderTable;
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
-['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFill','#fNote'].forEach(function(s){ $(s).onchange = renderTable; });
+['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNote'].forEach(function(s){ $(s).onchange = renderTable; });
 /* 看板药房切换器是主控件：同时驱动 KPI 与明细表 */
 $('#dStore').onchange = function(){
   $('#fStore').value = this.value;     // 同步到明细表的 fStore（fStore 自身改动会反向同步回来）
@@ -2877,10 +2890,11 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260918c',
+  ver: 'v20260918d',
   date: '2026-09-18',
-  sum: '小结新增本期购药/新患/老患人数，均可下钻与导出',
+  sum: '明细筛选栏新增首购日期区间筛选',
   items: [
+    '📅 <b>明细筛选新增「首购日期」</b>：按患者首次购药日期起止区间筛选，核查新患/老患更方便；与状态/药房/医院等筛选可叠加，切品种或换底表时自动清空',
     '👥 <b>小结新增本期购药拆分</b>：本期购药人数 = 新患（首次购药在本期）+ 老患（本期前已建档），三个数字均可点击下钻明细、弹窗导出名单',
     '🔎 <b>小结人数可下钻</b>：点应回购/已回购/未回购/预计复购的橙色数字，弹出该指标的患者明细（应回购日/姓名/电话/末次购药/药房/医院），人工修正入口移入弹窗',
     '🏪 <b>小结跟随药房筛选</b>：看板顶部药房切换器选定后，小结四项统计同步只算该药房（界面有筛选提示）',
