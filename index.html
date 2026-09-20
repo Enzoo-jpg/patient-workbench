@@ -1020,6 +1020,7 @@ function switchProduct(pid){
   if (!PDS[pid]) PDS[pid] = { pool: [], manual: {}, fuv: null, loaded: true };
   ST.pool = PDS[pid].pool;
   ST.manual = PDS[pid].manual;
+  ST.impModeTouched = false;                         // 换品种后重新按池量推导默认导入模式
   try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
   ST.result = null; ST.importMsg = '';
   /* 换品种后重置筛选，避免沿用上个品种 */
@@ -1043,6 +1044,7 @@ function switchProduct(pid){
         $('#drop').hidden = true; $('#app').hidden = false;
       }
       ST.pool = entry.pool; ST.manual = entry.manual || {};
+      syncImpMode();                                 // 懒加载完成后池量已真实，重新校正导入模式默认值
       recompute(); fillSelects(); refreshHeader(); updatePoolInfo(); render();
     });
   }
@@ -1106,10 +1108,19 @@ function stripRow(r){
   Object.keys(FL).forEach(function(f){ o[f] = poolField(r, f, FL[f]); });
   return o;
 }
-/* 导入模式默认值：数据池为空＝全量替换；已有数据＝增量追加（仍可手动改） */
+/* 导入模式默认值：数据池为空＝全量替换；已有数据＝增量追加。
+   用户手动改过后（impModeTouched）不再自动覆盖。
+   2026-09-20 第二起事故修复：懒加载切换品种的瞬间池还是空的，
+   自动默认会把「全量替换」残留到大池加载完成之后——
+   合并前必须按真实池量重新校正，加载完成后也要再同步一次。 */
 function syncImpMode(){
+  if (ST.impModeTouched) return;
   $('#impMode').value = ST.pool.length ? 'append' : 'replace';
 }
+(function(){
+  var sel = $('#impMode');
+  if (sel) sel.addEventListener('change', function(){ ST.impModeTouched = true; });
+})();
 /* 把本次文件行按所选模式并入数据池；行按商品名自动分拣到对应品种池。
    2026-09-20 事故修复：懒加载后未加载品种内存池为空，直接并入会以
    「仅本次新数据」覆盖服务器完整历史——合并前必须先预加载相关品种。 */
@@ -1172,6 +1183,12 @@ function applyImport(){
 
 /* 合并执行（applyImport 预加载完成后调用） */
 function applyImportGo(rows, mode, batches, unknown, noProdCol){
+  /* 最终保险：用户没手动改过模式下拉时，按合并瞬间的真实池量重新推导——
+     防止懒加载切换瞬间残留的「全量替换」把大池历史替换掉（2026-09-20） */
+  if (!ST.impModeTouched){
+    $('#impMode').value = (PDS[ST.pid] && PDS[ST.pid].pool.length) ? 'append' : 'replace';
+  }
+  mode = $('#impMode').value;
   pushUndo('导入数据');
   var pr = productOf(ST.pid);
   var anyReplace = false;
@@ -2864,6 +2881,7 @@ $('#btnClearPool').onclick = function(){
   ST.importMsg = ''; savePool(); updatePoolInfo();
   $('#app').hidden = true; $('#drop').hidden = false;
   $('#hsub').textContent = '刷新式 · 离线运行 · 数据不出本机';
+  ST.impModeTouched = false;                         // 清空属于用户主动重置，强制回到默认推导
   syncImpMode();                                     // 池已空，默认模式回到全量替换
 };
 
@@ -3117,14 +3135,14 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260920a',
+  ver: 'v20260920b',
   date: '2026-09-20',
-  sum: '修复导入清空历史数据的重大问题：导入前自动加载相关品种历史，加载失败则中止导入',
+  sum: '修复「全量替换」残留问题：切换品种瞬间池未加载完时，导入模式会错误停留在全量替换',
   items: [
-    '🛡️ <b>修复「导入清空历史」重大问题</b>：刷新后未查看过的品种在导入混品种底表时，历史数据会被新数据覆盖。现在导入前会自动先从服务器加载相关品种的完整历史，再合并新数据',
-    '🛑 <b>加载失败即中止导入</b>：若本地后端未启动导致历史加载失败，导入会自动中止并提示，绝不会用不完整数据覆盖服务器',
+    '🛡️ <b>修复「导入清空历史」重大问题（一）</b>：导入前自动先加载相关品种的完整历史再合并新数据；加载失败则中止导入，绝不覆盖服务器',
+    '🛑 <b>修复（二）导入模式残留</b>：切换品种瞬间数据池尚未加载完，导入模式会被自动设成「全量替换」且不恢复——现在池加载完成后自动校正为「增量追加」，合并前也会按真实池量重新推导；你手动改过的选择不会被覆盖',
     '🔒 <b>多重防护</b>：未加载品种禁止保存/进撤回快照；历史加载失败后可重试，不再误标为已加载',
-    '⚠️ <b>数据恢复提示</b>：09-20 上午的导入曾覆盖 博瑞纳/希必可/择捷美/贝赋 四个品种池的历史，修复后请重新导入这四个品种的原始底表即可恢复（增量追加会自动去重）'
+    '⚠️ <b>数据恢复提示</b>：今天的导入曾覆盖 博瑞纳/希必可/择捷美/贝赋/瑞福 五个品种池的历史。请重新导入这五个品种的<b>完整历史底表</b>（不是只有最新数据的文件），增量追加会自动去重'
   ]
 };
 (function(){
