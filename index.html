@@ -852,7 +852,12 @@ function beSave(pid){
   });
 }
 function persistPid(pid){
-  if (PDS[pid]) PDS[pid].loaded = true;      // 内存池已是权威数据，无需再懒加载
+  var e = PDS[pid];
+  if (!e) return;
+  /* 2026-09-20 事故护栏：懒加载改造后，未从服务器加载过的品种内存池为空。
+     若此时保存，会用空池/少量新数据把服务器上的完整历史覆盖掉——绝不保存。 */
+  if (BE.on && e.loaded === false && !e.pool.length) return;
+  e.loaded = true;      // 内存池已是权威数据，无需再懒加载
   if (BE.on){ beSave(pid); return; }
   try {
     localStorage.setItem(pidPoolKey(pid), JSON.stringify(PDS[pid].pool));
@@ -967,8 +972,11 @@ function registerDynMeta(pid, meta){
 /* 按需拉取单个品种池（含动态品种档案 meta） */
 function beLoadPool(pid, cb){
   fetch(BE.base + '/api/pool?pid=' + encodeURIComponent(pid), { cache: 'no-store' })
-    .then(function(r){ return r.json(); })
+    /* 2026-09-20 事故护栏：必须检查 r.ok——HTTP 500 带空 JSON 会被当成功，
+       拿到空池还标已加载，后续保存就会清空服务器历史 */
+    .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(j){
+      if (!j || j.ok === false) throw new Error('bad pool response');
       if (!PDS[pid]) PDS[pid] = { pool: [], manual: {}, fuv: null };
       /* 加载期间本地已产生权威数据（如刚导入）则不覆盖 */
       if (PDS[pid].loaded === true){ if (cb) cb(true); return; }
@@ -978,7 +986,9 @@ function beLoadPool(pid, cb){
       if (meta && meta.label && String(pid).indexOf('dyn_') === 0 && !productOf(pid)) registerDynMeta(pid, meta);
       if (cb) cb(true);
     })
-    .catch(function(){ if (PDS[pid]) PDS[pid].loaded = true; if (cb) cb(false); });
+    /* 2026-09-20 事故护栏：加载失败绝不把空池标成已加载（loaded=true），
+       否则后续保存会用空数据覆盖服务器历史；保持未加载状态，下次可重试 */
+    .catch(function(){ if (PDS[pid]){ PDS[pid].loading = false; PDS[pid].loadFail = true; } if (cb) cb(false); });
 }
 /* 顶栏品种下拉填充与切换 */
 function fillProdSel(){
@@ -1100,13 +1110,14 @@ function stripRow(r){
 function syncImpMode(){
   $('#impMode').value = ST.pool.length ? 'append' : 'replace';
 }
-/* 把本次文件行按所选模式并入数据池；行按商品名自动分拣到对应品种池 */
+/* 把本次文件行按所选模式并入数据池；行按商品名自动分拣到对应品种池。
+   2026-09-20 事故修复：懒加载后未加载品种内存池为空，直接并入会以
+   「仅本次新数据」覆盖服务器完整历史——合并前必须先预加载相关品种。 */
 function applyImport(){
   var rows = ST.rows || [];
   var mode = $('#impMode').value;
   var pr = productOf(ST.pid);
   if (!pr) { ST.importMsg = '未定义品种，无法导入。'; return; }
-  pushUndo('导入数据');
 
   /* 1) 按品种分拣：有商品名称列则逐行识别；无该列则整表按当前品种导入（无法判断只能当当前品种）
      未建档品种不再直接丢弃：按商品名称分组收集，导入完成后弹窗半自动建档 */
@@ -1125,6 +1136,44 @@ function applyImport(){
     });
   }
 
+  /* 1.5) 本次涉及的品种若有尚未从服务器加载的，先并行拉取历史，再进入合并 */
+  var need = Object.keys(batches).filter(function(pid){
+    return BE.on && PDS[pid] && PDS[pid].loaded === false;
+  });
+  if (need.length){
+    var dsI = $('#dropStatus');
+    var left = need.length, failed = [];
+    if (dsI) dsI.textContent = '正在加载相关品种的历史数据（共 ' + need.length + ' 个品种）…';
+    need.forEach(function(pid){ PDS[pid].loading = true; });
+    need.forEach(function(pid){
+      beLoadPool(pid, function(ok){
+        PDS[pid].loading = false;
+        if (!ok) failed.push(pid);
+        left--;
+        if (left > 0){
+          if (dsI) dsI.textContent = '正在加载相关品种的历史数据…（剩 ' + left + ' 个品种）';
+          return;
+        }
+        if (dsI) dsI.textContent = '';
+        if (failed.length){
+          ST.importMsg = '导入已中止：' + failed.map(function(pid){
+            var p = productOf(pid); return p ? p.label : pid;
+          }).join('、') + ' 的历史数据加载失败。请确认本地后端黑窗口是否开着，然后重新导入。';
+          alert(ST.importMsg);
+          return;
+        }
+        applyImportGo(rows, mode, batches, unknown, noProdCol);
+      });
+    });
+    return;
+  }
+  applyImportGo(rows, mode, batches, unknown, noProdCol);
+}
+
+/* 合并执行（applyImport 预加载完成后调用） */
+function applyImportGo(rows, mode, batches, unknown, noProdCol){
+  pushUndo('导入数据');
+  var pr = productOf(ST.pid);
   var anyReplace = false;
   Object.keys(batches).forEach(function(pid){
     var inRows = batches[pid];
@@ -3021,8 +3070,12 @@ var UNDO = { stack: [], MAX: 5 };
 function snapshotState(){
   var s = {};
   allProducts().forEach(function(p){
-    if (!PDS[p.id]) return;
-    s[p.id] = { pool: PDS[p.id].pool.slice(), manual: JSON.parse(JSON.stringify(PDS[p.id].manual)) };
+    var e = PDS[p.id];
+    if (!e) return;
+    /* 2026-09-20 事故护栏：未加载品种的空池不进快照——
+       否则撤回回放时会用快照里的空池覆盖服务器历史 */
+    if (BE.on && e.loaded === false) return;
+    s[p.id] = { pool: e.pool.slice(), manual: JSON.parse(JSON.stringify(e.manual)) };
   });
   return s;
 }
@@ -3046,7 +3099,10 @@ function undoLast(){
   UNDO.stack.pop();
   allProducts().forEach(function(p){
     var st = top.state[p.id];
-    if (st && PDS[p.id]){ PDS[p.id].pool = st.pool; PDS[p.id].manual = st.manual; persistPid(p.id); }
+    if (!st || !PDS[p.id]) return;
+    /* 2026-09-20 事故护栏：未加载的空池不回写，防止空数据覆盖服务器历史 */
+    if (BE.on && PDS[p.id].loaded === false && !PDS[p.id].pool.length) return;
+    PDS[p.id].pool = st.pool; PDS[p.id].manual = st.manual; persistPid(p.id);
   });
   switchProduct(ST.pid);                               // 重新挂接 ST.pool/manual 引用并重置筛选
   recompute(); fillSelects(); refreshHeader(); updatePoolInfo(); syncImpMode(); fillProdSel();
@@ -3061,22 +3117,14 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260918f',
-  date: '2026-09-18',
-  sum: '新增「新手引导」：在真实界面上聚光灯式带你认识每个部分',
+  ver: 'v20260920a',
+  date: '2026-09-20',
+  sum: '修复导入清空历史数据的重大问题：导入前自动加载相关品种历史，加载失败则中止导入',
   items: [
-    '🎓 <b>新增「? 新手引导」</b>：在真实界面上逐步高亮讲解（品种切换/搜索/脱敏/筛选/统计卡/明细表/小结），随时可跳过；首次打开自动演示一次，之后缩小为右下角「?」悬浮球，随时点开重看',
-    '🔄 <b>小结新增差异指标</b>：已回购但本期未购（提前在上期买了）、本期购药但非本期到期（提前买下期/脱落回归）——两个人数合计即「购药节奏偏离理论周期」的规模，均可点击下钻看明细，差异明细含「购药节奏」列（提前 X 天 / 逾期 X 天）',
-    '📅 <b>明细筛选新增「首购日期」</b>：按患者首次购药日期起止区间筛选，核查新患/老患更方便；与状态/药房/医院等筛选可叠加，切品种或换底表时自动清空',
-    '👥 <b>小结新增本期购药拆分</b>：本期购药人数 = 新患（首次购药在本期）+ 老患（本期前已建档），三个数字均可点击下钻明细、弹窗导出名单',
-    '🔎 <b>小结人数可下钻</b>：点应回购/已回购/未回购/预计复购的橙色数字，弹出该指标的患者明细（应回购日/姓名/电话/末次购药/药房/医院），人工修正入口移入弹窗',
-    '🏪 <b>小结跟随药房筛选</b>：看板顶部药房切换器选定后，小结四项统计同步只算该药房（界面有筛选提示）',
-    '📋 <b>新增「整体小结」</b>：自动统计本周应回购/已回购/未回购/回购率/下周预计复购，周期区间可手工改任意日期；橙色数字人工修正随备份走，一键复制成文字',
-    '🧬 <b>新品种半自动建档</b>：导入底表遇到未建档品种不再跳过，弹窗预填显示名/识别词，确认后自动建池入库；每盒天数手动填写（默认 30）',
-    '🗂 <b>新增「品种管理」</b>：动态品种可改名 / 改每盒天数 / 改识别词 / 删除（内置四品种只读）；改周期后全池自动重算',
-    '📥 <b>随访导入按品种自动分拣</b>：混品种任务表一次导入，各品种池分别聚合匹配（无需切换品种重复导入）；未建档品种任务自动跳过并注明',
-    '🔍 <b>筛选下拉内置搜索</b>：品种 / 药房 / 医院下拉点开后顶部带搜索框，选项多时输入关键字即时定位；选中项高亮，点外部自动收起',
-    '🔀 <b>切换品种体验修复</b>：切到暂无数据的品种时保留工作台界面并提示「数据在其它品种池」，不再回到导入页造成「数据丢失」错觉'
+    '🛡️ <b>修复「导入清空历史」重大问题</b>：刷新后未查看过的品种在导入混品种底表时，历史数据会被新数据覆盖。现在导入前会自动先从服务器加载相关品种的完整历史，再合并新数据',
+    '🛑 <b>加载失败即中止导入</b>：若本地后端未启动导致历史加载失败，导入会自动中止并提示，绝不会用不完整数据覆盖服务器',
+    '🔒 <b>多重防护</b>：未加载品种禁止保存/进撤回快照；历史加载失败后可重试，不再误标为已加载',
+    '⚠️ <b>数据恢复提示</b>：09-20 上午的导入曾覆盖 博瑞纳/希必可/择捷美/贝赋 四个品种池的历史，修复后请重新导入这四个品种的原始底表即可恢复（增量追加会自动去重）'
   ]
 };
 (function(){
@@ -3195,6 +3243,10 @@ try {
     document.getElementById('tourBall').hidden = false;   // 看过引导：常驻
   }
 } catch(e){ document.getElementById('tourBall').hidden = false; }
+
+/* 测试钩子：仅供自动化回归测试触达内部状态与函数，不影响正常使用（2026-09-20） */
+window.__wb = { ST: ST, PDS: PDS, BE: BE, applyImport: applyImport, persistPid: persistPid,
+                snapshotState: snapshotState, undoLast: undoLast, switchProduct: switchProduct };
 })();
 </script>
 </body>
