@@ -690,7 +690,11 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
       }
       if (ageBest == null) issues.ageMissing.push(tail.row);
 
-      var nextMs = last + daysPerBox * lastQty * DAY_MS;
+      /* 用药周期按患者覆盖（2026-09-20）：opts.cycleOf(key) 返回该患者自定义每盒天数，
+         未设置/非法时回退品种默认 daysPerBox。理论下次购药 = 末次购药 + 末次数量 × 该患者周期 */
+      var cyc = opts.cycleOf ? opts.cycleOf(key) : null;
+      if (!(cyc > 0)) cyc = daysPerBox;
+      var nextMs = last + cyc * lastQty * DAY_MS;
       // 存续状态口径（用户指定 2026-09-02）：
       //   预计购药日期(nextMs)当天及之前 → 在治；
       //   已过期 ≤ 30 天 → 断药预警；已过期 > 30 天 → 脱落。
@@ -710,6 +714,8 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         lastBuyMs: last,
         buyMs: items.map(function (x) { return x.ms; }),   // 全部购药时间升序（小结按历史序列判回购，2026-09-18）
         nextMs: nextMs,
+        cycleDays: cyc,                    // 该患者实际生效的用药周期（自定义或品种默认）
+        cycleCustom: cyc !== daysPerBox,   // 是否使用了个性化覆盖（界面提示用）
         totalQty: totalQty,
         lastQty: lastQty,
         hospital: tail.hosp,
@@ -1379,6 +1385,7 @@ var COLS = [
   {k:'lastBuy',   t:'末次 · 数量'},
   {k:'nextBuy',   t:'理论下次'},
   {k:'nextActual',t:'实际下次购药', e:'nextActual'},
+  {k:'cycle',     t:'用药周期(天)', e:'cycle'},
   {k:'status',    t:'存续状态'},
   {k:'diag',      t:'临床诊断',   e:'diag'},
   {k:'hospdoc',   t:'医院 / 医生'},
@@ -1449,13 +1456,13 @@ function saveManual(){
   var clean = {};
   Object.keys(ST.manual).forEach(function(k){
     var m = ST.manual[k] || {};
-    if (m.diag || m.pay || m.note || m.noteDate) clean[k] = m;
+    if (m.diag || m.pay || m.note || m.noteDate || m.cycle) clean[k] = m;
   });
   try { PDS[ST.pid].manual = clean; persistPid(ST.pid); }
   catch(e){ alert('本地存储写入失败：' + e.message); }
 }
 function manualOf(k){
-  if (!ST.manual[k]) ST.manual[k] = { diag:'', pay:'', note:'', noteDate:'' };
+  if (!ST.manual[k]) ST.manual[k] = { diag:'', pay:'', note:'', noteDate:'', cycle:'' };
   return ST.manual[k];
 }
 
@@ -1571,7 +1578,15 @@ function recompute(){
       return !(typeof q === 'number' && q < 0);
     });
   }
-  ST.result = E.compute(src, { daysPerBox: curProduct() ? curProduct().daysPerBox : 30 });
+  /* 用药周期按患者覆盖（2026-09-20）：manual 里填了 cycle 的患者用自定义天数，其余用品种默认 */
+  ST.result = E.compute(src, {
+    daysPerBox: curProduct() ? curProduct().daysPerBox : 30,
+    cycleOf: function(key){
+      var m = ST.manual[key];
+      var c = m ? +m.cycle : null;
+      return (c > 0) ? c : null;
+    }
+  });
   render();
 }
 
@@ -1815,13 +1830,14 @@ function renderSummary(){
   var ws = E.parseDateLike(sStr), we = E.parseDateLike(eStr) != null ? E.parseDateLike(eStr) + 86400000 : defWs + 7*86400000;
   if (we <= ws) we = ws + 7*86400000;                             // 止早于起的保护
   var len = we - ws;
-  var D = sumDaysVal() * 86400000;
   /* 跟随看板药房筛选（dStore）：与 KPI/明细表同一份过滤口径（用户 2026-09-18） */
   var ds = $('#dStore').value;
   var pats = (ST.result.patients || []).filter(function(p){ return !ds || p.store === ds; });
   var detail = { due: [], bought: [], pen: [], next: [], cur: [], newP: [], old: [], onTime: [], dueNoBuy: [], buyNoDue: [] };   // 下钻明细
   pats.forEach(function(p){
     var times = p.buyMs || [];
+    /* 用药周期按患者覆盖（2026-09-20）：engine 输出的 cycleDays 已含自定义值，未自定义=品种默认 */
+    var D = (p.cycleDays > 0 ? p.cycleDays : sumDaysVal()) * 86400000;
     var hit = false, hb = false, hitMs = null, hitIdx = -1;
     var inP = false, firstInP = null, lastInP = null, lastIdx = -1;   // 本期购药（周期内有任意一次实际购药）
     for (var i = 0; i < times.length; i++){
@@ -2207,6 +2223,7 @@ function cellOf(k, p, m, pay, st, mask){
     case 'lastBuy':    return td2(E.fmtDate(p.lastBuyMs), '末次月 ' + p.lastQty + ' 盒');
     case 'nextBuy':    return tdNext(p);
     case 'nextActual': return tdEdit(p, 'nextActual', m.nextActual || '', '');
+    case 'cycle':      return tdCycle(p, m);
     case 'status':     return '<td><span class="st st-'+st+'">'+st+'</span></td>';
     case 'diag':       return tdDiag(p, m);
     case 'hospdoc':    return td2(p.hospital, p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : '');
@@ -2237,7 +2254,7 @@ function renderTable(){
   Array.prototype.forEach.call(document.querySelectorAll('#thr th'), function(th){
     th.onclick = function(){
       var k = th.getAttribute('data-k');
-      if (k === 'diag' || k === 'pay' || k === 'note' || k === 'noteDate' || k.indexOf('fu') === 0) return;
+      if (k === 'diag' || k === 'pay' || k === 'note' || k === 'noteDate' || k === 'cycle' || k.indexOf('fu') === 0) return;
       if (ST.sortK === k) ST.sortDir = -ST.sortDir;
       else { ST.sortK = k; ST.sortDir = (k === 'name' || k === 'phone') ? 1 : -1; }
       renderTable();
@@ -2267,7 +2284,7 @@ function renderTable(){
       var m = manualOf(key);
       if ((m[f] || '') === inp.value) return;            // 值没变，不记撤回不落库
       /* 字段编辑也纳入撤回（用户 2026-09-10）：快照改前状态 */
-      var fl = {diag:'临床诊断', pay:'支付方式', note:'备注', noteDate:'备注日期', nextActual:'实际下次购药'}[f] || f;
+      var fl = {diag:'临床诊断', pay:'支付方式', note:'备注', noteDate:'备注日期', nextActual:'实际下次购药', cycle:'用药周期'}[f] || f;
       var pname = '';
       if (ST.result) ST.result.patients.forEach(function(pp){
         if (pp.key === key && !pname) pname = maskName(pp.name);
@@ -2277,6 +2294,11 @@ function renderTable(){
       if (f === 'note') m.noteDate = inp.value ? todayStr() : '';  // 备注日期自动记录
       inp.className = 'edit' + (inp.value ? ' done' : '');
       saveManual();
+      if (f === 'cycle'){
+        /* 用药周期影响理论下次购药/存续状态/小结 → 全量重算（recompute→render 已含表格与小结） */
+        recompute();
+        return;
+      }
       if (f === 'note'){
         var ref = inp.parentElement.querySelector('.ref');
         if (ref) ref.textContent = m.noteDate || '';
@@ -2291,7 +2313,7 @@ function renderTable(){
 
   var tot = ST.result.patients.length;
   $('#cnt').textContent = list.length + ' / ' + tot + ' 人';
-  $('#foot').textContent = '口径：患者键 = 开票抬头 + 电话；末次数量 = 末次购药所在自然月合计；理论下次购药 = 末次购药 + 末次数量 × 30 天；存续状态：预计购药日期当天及之前＝在治，过期 ≤30 天＝断药预警，过期 >30 天＝脱落；「实际下次购药」为人工填写，填写后存续状态按它判定，未填按理论下次';
+  $('#foot').textContent = '口径：患者键 = 开票抬头 + 电话；末次数量 = 末次购药所在自然月合计；理论下次购药 = 末次购药 + 末次数量 × 用药周期（默认每盒天数，「用药周期」列可按患者自定义）；存续状态：预计购药日期当天及之前＝在治，过期 ≤30 天＝断药预警，过期 >30 天＝脱落；「实际下次购药」为人工填写，填写后存续状态按它判定，未填按理论下次';
 }
 
 /* 今日日期（本地） */
@@ -2354,6 +2376,15 @@ function tdEdit(p, f, val, refHtml){
          'value="'+esc(val)+'"'+(f==='noteDate'||f==='nextActual'?' type="date"':'')+'>'+
          (refHtml ? '<span class="ref">'+esc(refHtml)+'</span>' : '')+'</td>';
 }
+/* 用药周期列（2026-09-20）：数字输入，留空=跟随品种默认；填写后理论下次/存续状态/小结全按该值算 */
+function tdCycle(p, m){
+  var def = curProduct() ? curProduct().daysPerBox : 30;
+  var eff = (+m.cycle > 0) ? +m.cycle : def;
+  return '<td><input class="edit'+(m.cycle ? ' done' : '')+'" data-k="'+esc(p.key)+'" data-f="cycle" type="number" min="1" step="1" '+
+         'value="'+esc(m.cycle || '')+'" placeholder="默认'+def+'" style="max-width:58px" '+
+         'title="用药周期（每盒天数）：留空=跟随品种默认 '+def+' 天；填写后该患者的理论下次购药、存续状态、小结统计都按此值计算">'+
+         '<span class="ref">'+(m.cycle ? '已自定义' : '')+'</span></td>';
+}
 
 /* ---------- 导出 ---------- */
 function download(name, content, mime){
@@ -2376,7 +2407,7 @@ function exportExcel(){
   var mask = $('#mask').checked;                       // 跟随"姓名/电话脱敏"开关
   var sourceDiag = curProduct() && curProduct().diagMode === 'source';
   var diagHead = sourceDiag ? '适应症（底表）' : '临床诊断';
-  var head = ['患者姓名','年龄','电话','首次购药时间','累计购药数量','最后一次购药时间','最后一次购药数量','理论下次购药日期',diagHead,'末次购药医院','末次科室','处方医生','支付方式','存续状态','备注','备注日期','末次随访','用药状态','减停药原因','用药问题'];
+  var head = ['患者姓名','年龄','电话','首次购药时间','累计购药数量','最后一次购药时间','最后一次购药数量','理论下次购药日期','用药周期(天)',diagHead,'末次购药医院','末次科室','处方医生','支付方式','存续状态','备注','备注日期','末次随访','用药状态','减停药原因','用药问题'];
   var aoa = [head];
   list.forEach(function(p){
     var m = manualOf(p.key);
@@ -2387,20 +2418,20 @@ function exportExcel(){
       p.ageBest==null?'':p.ageBest,
       mask ? maskPhone(p.phone) : p.phone,
       E.fmtDate(p.firstBuyMs), p.totalQty, E.fmtDate(p.lastBuyMs), p.lastQty,
-      p.nextMs ? excelSerial(p.nextMs) : '', diagVal, p.hospital, p.dept || '', (p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : ''),
+      p.nextMs ? excelSerial(p.nextMs) : '', (p.cycleDays || '') + (p.cycleCustom ? '（自定义）' : ''), diagVal, p.hospital, p.dept || '', (p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : ''),
       m.pay || p.pay, effStatus(p), m.note, m.noteDate,
       fv && fv.ms ? excelSerial(fv.ms) : '', fv ? fv.med : '', fv ? fv.reason : '', fv ? fv.issue : ''
     ]);
   });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  /* 日期列数值化（Excel 可直接筛选/排序）：第 8 列理论下次购药日期、第 17 列末次随访 */
-  [7, 16].forEach(function(ci){
+  /* 日期列数值化（Excel 可直接筛选/排序）：第 8 列理论下次购药日期、第 18 列末次随访 */
+  [7, 17].forEach(function(ci){
     for (var R = 1; R < aoa.length; R++){
       var dc = ws[XLSX.utils.encode_cell({ r: R, c: ci })];
       if (dc && dc.t === 'n' && dc.v !== '') dc.z = 'yyyy-mm-dd';
     }
   });
-  ws['!cols'] = [12,6,15,12,13,13,14,14,11,22,10,10,22,10,30,11,14,10,18,20].map(function(w){ return {wch:w}; });
+  ws['!cols'] = [12,6,15,12,13,13,14,14,12,11,22,10,10,22,10,30,11,14,10,18,20].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '随访表');
   XLSX.writeFile(wb, (curProduct() ? curProduct().label.split('（')[0] : '患者') + '工作台_' + stamp() + '.xlsx');
@@ -2441,7 +2472,7 @@ function doExportBackup(ids){
     var clean = {};
     Object.keys(PDS[id].manual).forEach(function(k){
       var m = PDS[id].manual[k] || {};
-      if (m.diag || m.pay || m.note || m.noteDate) clean[k] = m;
+      if (m.diag || m.pay || m.note || m.noteDate || m.cycle) clean[k] = m;
     });
     all[id] = { pool: PDS[id].pool, manual: clean, sum: sumManual(id) };
   });
@@ -2483,7 +2514,7 @@ function importBackup(file){
         /* 旧版 v2：pool 归当前品种，填写并入当前品种 */
         var n = 0;
         Object.keys(o.data||{}).forEach(function(k){
-          ST.manual[k] = { diag:o.data[k].diag||'', pay:o.data[k].pay||'', note:o.data[k].note||'', noteDate:o.data[k].noteDate||'' };
+          ST.manual[k] = { diag:o.data[k].diag||'', pay:o.data[k].pay||'', note:o.data[k].note||'', noteDate:o.data[k].noteDate||'', cycle:o.data[k].cycle||'' };
           n++;
         });
         PDS[ST.pid].pool = o.pool;
@@ -2493,7 +2524,7 @@ function importBackup(file){
         /* 老备份只有 manual(data) */
         var d = o && o.data ? o.data : o;
         Object.keys(d).forEach(function(k){
-          ST.manual[k] = { diag:d[k].diag||'', pay:d[k].pay||'', note:d[k].note||'', noteDate:d[k].noteDate||'' };
+          ST.manual[k] = { diag:d[k].diag||'', pay:d[k].pay||'', note:d[k].note||'', noteDate:d[k].noteDate||'', cycle:d[k].cycle||'' };
         });
         saveManual();
         msg.push('填写内容已并入 ' + ST.pid);
@@ -3139,14 +3170,14 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260920b',
+  ver: 'v20260920c',
   date: '2026-09-20',
-  sum: '修复「全量替换」残留问题：切换品种瞬间池未加载完时，导入模式会错误停留在全量替换',
+  sum: '新增「用药周期」按患者自定义：皮科等周期特殊的患者可单独调整每盒天数，计算全面跟随',
   items: [
-    '🛡️ <b>修复「导入清空历史」重大问题（一）</b>：导入前自动先加载相关品种的完整历史再合并新数据；加载失败则中止导入，绝不覆盖服务器',
-    '🛑 <b>修复（二）导入模式残留</b>：切换品种瞬间数据池尚未加载完，导入模式会被自动设成「全量替换」且不恢复——现在池加载完成后自动校正为「增量追加」，合并前也会按真实池量重新推导；你手动改过的选择不会被覆盖',
-    '🔒 <b>多重防护</b>：未加载品种禁止保存/进撤回快照；历史加载失败后可重试，不再误标为已加载',
-    '⚠️ <b>数据恢复提示</b>：今天的导入曾覆盖 博瑞纳/希必可/择捷美/贝赋/瑞福 五个品种池的历史。请重新导入这五个品种的<b>完整历史底表</b>（不是只有最新数据的文件），增量追加会自动去重'
+    '⏱️ <b>新增「用药周期(天)」列</b>：患者明细里直接输入该患者的每盒天数（留空=跟随品种默认），理论下次购药、存续状态、小结统计（含按计划/提前/延长周期拆分）全部按自定义值计算；导出 Excel 同步新增该列',
+    '🛡️ <b>修复「导入清空历史」重大问题</b>：导入前自动先加载相关品种的完整历史再合并新数据；加载失败则中止导入，绝不覆盖服务器',
+    '🛑 <b>修复导入模式残留</b>：切换品种瞬间数据池尚未加载完时，导入模式会被错误设成「全量替换」——现在池加载完成后自动校正为「增量追加」，合并前也按真实池量重新推导',
+    '⚠️ <b>数据恢复提示</b>：今天的导入曾覆盖 博瑞纳/希必可/择捷美/贝赋/瑞福 五个品种池的历史。请重新导入这五个品种的<b>完整历史底表</b>（增量追加会自动去重）'
   ]
 };
 (function(){
@@ -3253,18 +3284,9 @@ document.getElementById('tourSkip').onclick = tourEnd;
 var btnTour = document.getElementById('btnTour'); if (btnTour) btnTour.onclick = tourStart;
 var btnTourDrop = document.getElementById('btnTourDrop'); if (btnTourDrop) btnTourDrop.onclick = tourStart;
 document.getElementById('tourBall').onclick = tourStart;
-/* 悬浮球显示规则：看过引导（或已有数据的老用户）常驻右下角；全新用户先自动演示，结束后再出现 */
-try {
-  var tourSeen = !!localStorage.getItem(TOUR_FLAG);
-  if (!tourSeen){
-    var tourAny = false;
-    for (var tk in PDS){ if (PDS[tk].pool && PDS[tk].pool.length){ tourAny = true; break; } }
-    if (!tourAny){ setTimeout(tourStart, 400); }          // 全新用户：自动演示一次，结束后球出现
-    else { document.getElementById('tourBall').hidden = false; }   // 有数据但没看过引导：直接出球
-  } else {
-    document.getElementById('tourBall').hidden = false;   // 看过引导：常驻
-  }
-} catch(e){ document.getElementById('tourBall').hidden = false; }
+/* 悬浮球显示规则（2026-09-20 调整，用户要求）：不再自动弹出引导，
+   悬浮球永远常驻右下角；想看引导随时点球或顶栏「? 新手引导」 */
+try { document.getElementById('tourBall').hidden = false; } catch(e){}
 
 /* 测试钩子：仅供自动化回归测试触达内部状态与函数，不影响正常使用（2026-09-20） */
 window.__wb = { ST: ST, PDS: PDS, BE: BE, applyImport: applyImport, persistPid: persistPid,
