@@ -2989,15 +2989,16 @@ function syncRangeBtn(){
   var t = $('#sumRangeTxt'); if (!t) return;
   t.textContent = ($('#sumFrom').value || '…') + ' ~ ' + ($('#sumTo').value || '…');
 }
-var calY = 0, calM = 0, calPickS = null;                          // calM: 0-11；calPickS = 已点的开始日期(ms)
+var calY = 0, calM = 0, calPickS = null, calHover = null;         // calM: 0-11；calPickS = 已点的开始日期(ms)；calHover = 悬停预览日期(ms)
 function calOpen(){
   var f = E.parseDateLike($('#sumFrom').value);
   var base = f != null ? new Date(f) : new Date();
-  calY = base.getFullYear(); calM = base.getMonth(); calPickS = null;
+  calY = base.getFullYear(); calM = base.getMonth(); calPickS = null; calHover = null;
   $('#calPanel').hidden = false;
   calRender();
 }
 function calRender(){
+  calHover = null;                                                // 重建网格后悬停状态失效
   var p = $('#calPanel');
   var lead = (new Date(calY, calM, 1).getDay() + 6) % 7;          // 周一开头的前置空格
   var dim = new Date(calY, calM + 1, 0).getDate();
@@ -3035,10 +3036,36 @@ function applySumRange(sMs, eMs){
   $('#calPanel').hidden = true;
   renderSummary();                                                // renderSummary 内会 syncRangeBtn
 }
+/* 悬停预览（2026-09-21）：选完开始后，鼠标扫过的日期实时当"预览结束"，中间日期浅紫铺开 */
+function calUpdateHi(){
+  var p = $('#calPanel'); if (!p) return;
+  var end = (calPickS != null && calHover != null && calHover > calPickS) ? calHover : null;
+  Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
+    var m = +el.getAttribute('data-ms');
+    var cls = 'calD';
+    if (m === calPickS || (end != null && m === end)) cls += ' ep';
+    else if (calPickS != null && end != null && m > calPickS && m < end) cls += ' inR';
+    el.className = cls;
+  });
+  var hint = p.querySelector('.calHint');
+  if (hint) hint.textContent = calPickS == null ? '点第 1 个日期 = 开始'
+    : (end != null ? '预览 ' + sumYmd(calPickS) + ' ~ ' + sumYmd(end) + '，点击确认'
+    : (calHover != null && calHover < calPickS ? '点更早日期 = 重设开始' : '再点 1 个日期 = 结束'));
+}
 $('#sumRangeBtn').onclick = function(){
   var p = $('#calPanel');
   if (p.hidden) calOpen(); else p.hidden = true;
 };
+/* 悬停预览监听：挂在 #calPanel 上做事件委托，innerHTML 重建也不丢失 */
+$('#calPanel').addEventListener('mouseover', function(ev){
+  var el = ev.target.closest ? ev.target.closest('.calD') : null;
+  if (!el) return;
+  var m = +el.getAttribute('data-ms');
+  if (m !== calHover){ calHover = m; calUpdateHi(); }
+});
+$('#calPanel').addEventListener('mouseleave', function(){
+  if (calHover != null){ calHover = null; calUpdateHi(); }
+});
 document.addEventListener('click', function(ev){
   var p = $('#calPanel');
   if (!p || p.hidden) return;
