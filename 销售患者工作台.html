@@ -444,6 +444,7 @@
         <option value="stale90">超过 90 天未随访</option>
       </select>
       <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
+      <button id="btnDelSel" hidden style="color:var(--rose);border-color:var(--rose)" title="删除选中的患者及其全部购药记录（本品种）；删除前自动留快照，可用「撤回」恢复">删除选中患者</button>
       <button id="btnTour" title="在真实界面上带你认识每个部分（随时可跳过）">? 新手引导</button>
       <details id="colSetD" class="colset">
         <summary title="选择要显示的列">列设置 ▾</summary>
@@ -790,7 +791,7 @@ var $ = function(s){ return document.querySelector(s); };
 
 /* ---------- 状态 ---------- */
 var ST = { buf:null, rows:null, header:null, sheetName:'', sheetNames:[], result:null,
-           sortK:'lastBuyMs', sortDir:-1, manual:{}, pool:[], importMsg:'' };
+           sortK:'lastBuyMs', sortDir:-1, manual:{}, pool:[], importMsg:'', rowSelKeys:{} };
 var LS_KEY  = 'patient_workbench_manual_v1';
 var LS_POOL = 'patient_workbench_pool_v1';
 
@@ -1046,6 +1047,8 @@ function switchProduct(pid){
   ST.pool = PDS[pid].pool;
   ST.manual = PDS[pid].manual;
   ST.impModeTouched = false;                         // 换品种后重新按池量推导默认导入模式
+  ST.rowSelKeys = {};                                // 换品种清空行选中（键不跨品种）
+  updateDelSelBtn();
   try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
   ST.result = null; ST.importMsg = '';
   /* 换品种后重置筛选，避免沿用上个品种 */
@@ -1248,6 +1251,7 @@ function applyImportGo(rows, mode, batches, unknown, noProdCol){
   /* 当前视图品种若未被此文件涉及，确保 ST.pool/manual 仍指向它自己的池 */
   if (!anyReplace){ ST.pool = PDS[ST.pid].pool; }
   ST.manual = PDS[ST.pid].manual;
+  ST.rowSelKeys = {}; updateDelSelBtn();               // 导入可能替换池内容，行选中一律失效
 
   /* 2) 汇总提示 */
   var parts = [];
@@ -2292,7 +2296,7 @@ function renderTable(){
     var m = manualOf(p.key);
     var pay = m.pay || p.pay || '';
     var st = effStatus(p);
-    return '<tr data-key="' + esc(p.key) + '"' + (ST.rowSelKey === p.key ? ' class="row-sel"' : '') + '>' + vcols.map(function(c){ return cellOf(c.k, p, m, pay, st, mask); }).join('') + '</tr>';
+    return '<tr data-key="' + esc(p.key) + '"' + (ST.rowSelKeys && ST.rowSelKeys[p.key] ? ' class="row-sel"' : '') + '>' + vcols.map(function(c){ return cellOf(c.k, p, m, pay, st, mask); }).join('') + '</tr>';
   }).join('');
   $('#tb').innerHTML = html;
 
@@ -2933,6 +2937,7 @@ $('#btnClearPool').onclick = function(){
   pushUndo('清空数据池');
   PDS[ST.pid].pool = [];            // 清真身（原实现只清视图引用，刷新后数据会复活——2026-09-10 修复）
   ST.pool = PDS[ST.pid].pool;
+  ST.rowSelKeys = {}; updateDelSelBtn();   // 池已空，行选中随之失效
   ST.importMsg = ''; savePool(); updatePoolInfo();
   $('#app').hidden = true; $('#drop').hidden = false;
   $('#hsub').textContent = '刷新式 · 离线运行 · 数据不出本机';
@@ -2943,7 +2948,7 @@ $('#btnClearPool').onclick = function(){
 /* 切换品种事件 */
 $('#prodSel').onchange = onSwitchProduct;
 
-/* 明细表点击选中行：Pastel 紫高亮，再点同一行取消；选中键记录后重渲染（筛选/排序/改值）自动恢复。
+/* 明细表点击选中行：Pastel 紫高亮，多选切换（2026-09-22 升级为多选，配合「删除选中患者」）。
    点击行内编辑控件（input/select）只做「确保选中」，不触发取消 */
 $('#tb').addEventListener('click', function(ev){
   var tr = ev.target.closest ? ev.target.closest('tr') : null;
@@ -2954,13 +2959,64 @@ $('#tb').addEventListener('click', function(ev){
   var was = tr.classList.contains('row-sel');
   if (isEdit){
     if (was) return;                                   // 编辑控件点击：选中行保持，不做取消
-  } else if (was){
-    tr.classList.remove('row-sel'); ST.rowSelKey = null; return;
+    tr.classList.add('row-sel');
+    ST.rowSelKeys[key] = true;
+    updateDelSelBtn();
+    return;
   }
-  Array.prototype.forEach.call(this.children, function(r){ r.classList.remove('row-sel'); });
-  tr.classList.add('row-sel');
-  ST.rowSelKey = key;
+  /* 普通点击 = 切换该行选中（多选） */
+  if (was){ tr.classList.remove('row-sel'); delete ST.rowSelKeys[key]; }
+  else { tr.classList.add('row-sel'); ST.rowSelKeys[key] = true; }
+  updateDelSelBtn();
 });
+/* 选中人数驱动「删除选中患者」按钮的显隐与文案 */
+function updateDelSelBtn(){
+  var b = $('#btnDelSel'); if (!b) return;
+  var n = Object.keys(ST.rowSelKeys || {}).length;
+  b.hidden = !n;
+  b.textContent = n ? '删除选中患者(' + n + ')' : '删除选中患者';
+}
+
+/* ---------- 删除选中患者（2026-09-22）----------
+   明细表一行 = 一个聚合患者（底表里可能有多条购药记录）。
+   删除 = 从当前品种数据池中移除该患者的全部购药记录（按引擎同款患者键匹配），
+   前置快照可撤回，删除后立即持久化（后端/本机）并重算全页。 */
+function rowKeyOf(r){
+  /* 复刻 engine.js 的分组键：抬头(invoiceName)+电话(phone)；全空回退订单号 */
+  function gv(f, col){ return r[f] !== undefined ? r[f] : r[col]; }
+  var name = gv('invoiceName', 'V') == null ? '' : String(gv('invoiceName', 'V')).trim();
+  var phone = gv('phone', 'O') == null ? '' : String(gv('phone', 'O')).trim();
+  var ono = gv('orderNo', 'E') == null ? '' : String(gv('orderNo', 'E')).trim();
+  return (!name && !phone && ono) ? '@订单:' + ono : (name + '|' + phone);
+}
+$('#btnDelSel').onclick = function(){
+  var keys = Object.keys(ST.rowSelKeys || {});
+  if (!keys.length) return;
+  var all = ST.result ? (ST.result.patients || []) : [];
+  var info = keys.map(function(k){
+    for (var i = 0; i < all.length; i++) if (all[i].key === k) return all[i];
+    return null;
+  }).filter(Boolean);
+  if (!info.length){ alert('选中的患者已不在当前列表中，请重新选择。'); return; }
+  var mask = $('#mask').checked;
+  var lines = info.map(function(p){
+    return '· ' + (mask ? maskName(p.name) : p.name) + '（' + p.nRows + ' 条购药记录，累计 ' + p.totalQty + ' 盒）';
+  });
+  if (!confirm('确定从「' + (curProduct() ? curProduct().label : ST.pid) + '」数据池中删除选中的 ' + info.length + ' 位患者吗？\n\n' +
+    lines.join('\n') + '\n\n将删除这些患者的全部购药记录，小结/统计/导出同步减少。\n删除前已自动留快照，可点「↩ 撤回」恢复。')) return;
+  pushUndo('删除患者（' + info.length + ' 人）');
+  var del = 0;
+  PDS[ST.pid].pool = PDS[ST.pid].pool.filter(function(r){
+    var hit = keys.indexOf(rowKeyOf(r)) >= 0;
+    if (hit) del++;
+    return !hit;
+  });
+  ST.pool = PDS[ST.pid].pool;
+  ST.rowSelKeys = {};
+  savePool(); updatePoolInfo(); updateDelSelBtn();
+  recompute();                                       // 重算 + 全页渲染（明细/小结/KPI 同步）
+  alert('已删除 ' + info.length + ' 位患者、共 ' + del + ' 条购药记录。\n如删错了，点「↩ 撤回」即可恢复。');
+};
 
 /* ---------- 整体小结：周期快捷填充/切换 + 数字人工修正 + 复制 ---------- */
 Array.prototype.forEach.call(document.querySelectorAll('.sumCycle .sumBtn'), function(b){
