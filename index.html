@@ -129,6 +129,23 @@
   .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:var(--violet);font-weight:700;
     border:1px solid var(--line);border-radius:6px;padding:2px 4px;text-align:center;background:#fff}
   .sumDaysLab input:focus{outline:none;border-color:var(--violet)}
+  /* 周期日历（2026-09-20）：一个日历面板选起止日期，替代两个原生日期框 */
+  .sumRangeWrap{position:relative}
+  #calPanel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--card);
+    border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(90,80,130,.16);
+    padding:10px;width:252px;user-select:none}
+  .calHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .calHead b{font-size:13px;color:var(--ink)}
+  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:var(--violet);
+    padding:2px 9px;border-radius:8px;line-height:1.2}
+  .calNav:hover{background:var(--violet-l)}
+  .calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+  .calWd{font-size:11px;color:var(--ink2);padding:2px 0}
+  .calD{font-size:12px;padding:4px 0;border-radius:8px;cursor:pointer;color:var(--ink)}
+  .calD:hover{background:var(--violet-l)}
+  .calD.inR{background:var(--violet-l)}
+  .calD.ep{background:var(--violet);color:#fff;font-weight:700}
+  .calHint{font-size:11px;color:var(--ink3);margin-top:6px;text-align:center}
   .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid var(--violet);
     background:var(--violet-l);color:var(--violet);cursor:pointer}
   .sumCopy:hover{background:var(--violet);color:#fff}
@@ -360,9 +377,11 @@
         <button type="button" class="sumBtn on" data-cy="0">本周</button>
         <button type="button" class="sumBtn" data-cy="1">下周</button>
       </span>
-      <span class="sumDaysLab">周期
-        <input type="date" id="sumFrom" title="统计周期起（可手工改任意区间，改完自动重算小结）"> ~
-        <input type="date" id="sumTo" title="统计周期止">
+      <span class="sumDaysLab sumRangeWrap">周期
+        <button type="button" id="sumRangeBtn" class="sumBtn" title="点击打开日历：第 1 次点击选开始日期，第 2 次点击选结束日期">📅 <span id="sumRangeTxt"></span></button>
+        <input type="date" id="sumFrom" hidden>
+        <input type="date" id="sumTo" hidden>
+        <div id="calPanel" hidden></div>
       </span>
       <span class="grow"></span>
       <button type="button" id="btnCopySum" class="sumCopy" title="复制小结文字，可直接粘贴到微信/群">复制小结</button>
@@ -425,6 +444,7 @@
         <option value="stale90">超过 90 天未随访</option>
       </select>
       <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
+      <button id="btnDelSel" hidden style="color:var(--rose);border-color:var(--rose)" title="删除选中的患者及其全部购药记录（本品种）；删除前自动留快照，可用「撤回」恢复">删除选中患者</button>
       <button id="btnTour" title="在真实界面上带你认识每个部分（随时可跳过）">? 新手引导</button>
       <details id="colSetD" class="colset">
         <summary title="选择要显示的列">列设置 ▾</summary>
@@ -771,7 +791,7 @@ var $ = function(s){ return document.querySelector(s); };
 
 /* ---------- 状态 ---------- */
 var ST = { buf:null, rows:null, header:null, sheetName:'', sheetNames:[], result:null,
-           sortK:'lastBuyMs', sortDir:-1, manual:{}, pool:[], importMsg:'' };
+           sortK:'lastBuyMs', sortDir:-1, manual:{}, pool:[], importMsg:'', rowSelKeys:{} };
 var LS_KEY  = 'patient_workbench_manual_v1';
 var LS_POOL = 'patient_workbench_pool_v1';
 
@@ -1027,6 +1047,8 @@ function switchProduct(pid){
   ST.pool = PDS[pid].pool;
   ST.manual = PDS[pid].manual;
   ST.impModeTouched = false;                         // 换品种后重新按池量推导默认导入模式
+  ST.rowSelKeys = {};                                // 换品种清空行选中（键不跨品种）
+  updateDelSelBtn();
   try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
   ST.result = null; ST.importMsg = '';
   /* 换品种后重置筛选，避免沿用上个品种 */
@@ -1229,6 +1251,7 @@ function applyImportGo(rows, mode, batches, unknown, noProdCol){
   /* 当前视图品种若未被此文件涉及，确保 ST.pool/manual 仍指向它自己的池 */
   if (!anyReplace){ ST.pool = PDS[ST.pid].pool; }
   ST.manual = PDS[ST.pid].manual;
+  ST.rowSelKeys = {}; updateDelSelBtn();               // 导入可能替换池内容，行选中一律失效
 
   /* 2) 汇总提示 */
   var parts = [];
@@ -1827,6 +1850,7 @@ function renderSummary(){
   var eStr = toInp.value || sm.ce || sumYmd(defWs + (defLen - 1)*86400000);
   if (document.activeElement !== fromInp) fromInp.value = sStr;   // 输入中不被重置
   if (document.activeElement !== toInp) toInp.value = eStr;
+  syncRangeBtn();                                                  // 周期按钮文字跟随（日历版 2026-09-20）
   var ws = E.parseDateLike(sStr), we = E.parseDateLike(eStr) != null ? E.parseDateLike(eStr) + 86400000 : defWs + 7*86400000;
   if (we <= ws) we = ws + 7*86400000;                             // 止早于起的保护
   var len = we - ws;
@@ -2272,7 +2296,7 @@ function renderTable(){
     var m = manualOf(p.key);
     var pay = m.pay || p.pay || '';
     var st = effStatus(p);
-    return '<tr data-key="' + esc(p.key) + '"' + (ST.rowSelKey === p.key ? ' class="row-sel"' : '') + '>' + vcols.map(function(c){ return cellOf(c.k, p, m, pay, st, mask); }).join('') + '</tr>';
+    return '<tr data-key="' + esc(p.key) + '"' + (ST.rowSelKeys && ST.rowSelKeys[p.key] ? ' class="row-sel"' : '') + '>' + vcols.map(function(c){ return cellOf(c.k, p, m, pay, st, mask); }).join('') + '</tr>';
   }).join('');
   $('#tb').innerHTML = html;
 
@@ -2722,7 +2746,7 @@ var TIPS = {
   '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
   '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
-  '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格（.xlsx）。<br>导出字段固定 20 列：患者姓名、年龄、电话、首次购药时间、累计购药数量、最后一次购药时间、最后一次购药数量、理论下次购药日期、临床诊断、末次购药医院、末次科室、处方医生、支付方式、存续状态、备注、备注日期、末次随访、用药状态、减停药原因、用药问题（末尾 4 列在导入随访数据后才有值）。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
+  '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
   '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过<br>默认值自动定：数据池为空时＝全量替换；已有数据时＝增量追加，仍可手动切换。']
@@ -2913,6 +2937,7 @@ $('#btnClearPool').onclick = function(){
   pushUndo('清空数据池');
   PDS[ST.pid].pool = [];            // 清真身（原实现只清视图引用，刷新后数据会复活——2026-09-10 修复）
   ST.pool = PDS[ST.pid].pool;
+  ST.rowSelKeys = {}; updateDelSelBtn();   // 池已空，行选中随之失效
   ST.importMsg = ''; savePool(); updatePoolInfo();
   $('#app').hidden = true; $('#drop').hidden = false;
   $('#hsub').textContent = '刷新式 · 离线运行 · 数据不出本机';
@@ -2923,7 +2948,7 @@ $('#btnClearPool').onclick = function(){
 /* 切换品种事件 */
 $('#prodSel').onchange = onSwitchProduct;
 
-/* 明细表点击选中行：Pastel 紫高亮，再点同一行取消；选中键记录后重渲染（筛选/排序/改值）自动恢复。
+/* 明细表点击选中行：Pastel 紫高亮，多选切换（2026-09-22 升级为多选，配合「删除选中患者」）。
    点击行内编辑控件（input/select）只做「确保选中」，不触发取消 */
 $('#tb').addEventListener('click', function(ev){
   var tr = ev.target.closest ? ev.target.closest('tr') : null;
@@ -2934,19 +2959,70 @@ $('#tb').addEventListener('click', function(ev){
   var was = tr.classList.contains('row-sel');
   if (isEdit){
     if (was) return;                                   // 编辑控件点击：选中行保持，不做取消
-  } else if (was){
-    tr.classList.remove('row-sel'); ST.rowSelKey = null; return;
+    tr.classList.add('row-sel');
+    ST.rowSelKeys[key] = true;
+    updateDelSelBtn();
+    return;
   }
-  Array.prototype.forEach.call(this.children, function(r){ r.classList.remove('row-sel'); });
-  tr.classList.add('row-sel');
-  ST.rowSelKey = key;
+  /* 普通点击 = 切换该行选中（多选） */
+  if (was){ tr.classList.remove('row-sel'); delete ST.rowSelKeys[key]; }
+  else { tr.classList.add('row-sel'); ST.rowSelKeys[key] = true; }
+  updateDelSelBtn();
 });
+/* 选中人数驱动「删除选中患者」按钮的显隐与文案 */
+function updateDelSelBtn(){
+  var b = $('#btnDelSel'); if (!b) return;
+  var n = Object.keys(ST.rowSelKeys || {}).length;
+  b.hidden = !n;
+  b.textContent = n ? '删除选中患者(' + n + ')' : '删除选中患者';
+}
+
+/* ---------- 删除选中患者（2026-09-22）----------
+   明细表一行 = 一个聚合患者（底表里可能有多条购药记录）。
+   删除 = 从当前品种数据池中移除该患者的全部购药记录（按引擎同款患者键匹配），
+   前置快照可撤回，删除后立即持久化（后端/本机）并重算全页。 */
+function rowKeyOf(r){
+  /* 复刻 engine.js 的分组键：抬头(invoiceName)+电话(phone)；全空回退订单号 */
+  function gv(f, col){ return r[f] !== undefined ? r[f] : r[col]; }
+  var name = gv('invoiceName', 'V') == null ? '' : String(gv('invoiceName', 'V')).trim();
+  var phone = gv('phone', 'O') == null ? '' : String(gv('phone', 'O')).trim();
+  var ono = gv('orderNo', 'E') == null ? '' : String(gv('orderNo', 'E')).trim();
+  return (!name && !phone && ono) ? '@订单:' + ono : (name + '|' + phone);
+}
+$('#btnDelSel').onclick = function(){
+  var keys = Object.keys(ST.rowSelKeys || {});
+  if (!keys.length) return;
+  var all = ST.result ? (ST.result.patients || []) : [];
+  var info = keys.map(function(k){
+    for (var i = 0; i < all.length; i++) if (all[i].key === k) return all[i];
+    return null;
+  }).filter(Boolean);
+  if (!info.length){ alert('选中的患者已不在当前列表中，请重新选择。'); return; }
+  var mask = $('#mask').checked;
+  var lines = info.map(function(p){
+    return '· ' + (mask ? maskName(p.name) : p.name) + '（' + p.nRows + ' 条购药记录，累计 ' + p.totalQty + ' 盒）';
+  });
+  if (!confirm('确定从「' + (curProduct() ? curProduct().label : ST.pid) + '」数据池中删除选中的 ' + info.length + ' 位患者吗？\n\n' +
+    lines.join('\n') + '\n\n将删除这些患者的全部购药记录，小结/统计/导出同步减少。\n删除前已自动留快照，可点「↩ 撤回」恢复。')) return;
+  pushUndo('删除患者（' + info.length + ' 人）');
+  var del = 0;
+  PDS[ST.pid].pool = PDS[ST.pid].pool.filter(function(r){
+    var hit = keys.indexOf(rowKeyOf(r)) >= 0;
+    if (hit) del++;
+    return !hit;
+  });
+  ST.pool = PDS[ST.pid].pool;
+  ST.rowSelKeys = {};
+  savePool(); updatePoolInfo(); updateDelSelBtn();
+  recompute();                                       // 重算 + 全页渲染（明细/小结/KPI 同步）
+  alert('已删除 ' + info.length + ' 位患者、共 ' + del + ' 条购药记录。\n如删错了，点「↩ 撤回」即可恢复。');
+};
 
 /* ---------- 整体小结：周期快捷填充/切换 + 数字人工修正 + 复制 ---------- */
-Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(b){
+Array.prototype.forEach.call(document.querySelectorAll('.sumCycle .sumBtn'), function(b){
   b.onclick = function(){
     ST.sumCycle = +b.getAttribute('data-cy');
-    Array.prototype.forEach.call(document.querySelectorAll('.sumBtn'), function(x){ x.classList.toggle('on', x === b); });
+    Array.prototype.forEach.call(document.querySelectorAll('.sumCycle .sumBtn'), function(x){ x.classList.toggle('on', x === b); });
     var off = ST.sumCycle, ws = sumWeekStart(off);
     $('#sumFrom').value = sumYmd(ws);                          // 按钮 = 快捷填充标准周区间
     $('#sumTo').value = sumYmd(ws + 6*86400000);
@@ -2963,6 +3039,99 @@ $('#sumFrom').onchange = $('#sumTo').onchange = function(){
   saveSumManual(ST.pid, sm);
   renderSummary();
 };
+
+/* ---------- 周期日历（2026-09-20）：一个日历选起止日期；隐藏的 sumFrom/sumTo 仍是数据源，统计逻辑零改动 ---------- */
+function syncRangeBtn(){
+  var t = $('#sumRangeTxt'); if (!t) return;
+  t.textContent = ($('#sumFrom').value || '…') + ' ~ ' + ($('#sumTo').value || '…');
+}
+var calY = 0, calM = 0, calPickS = null, calHover = null;         // calM: 0-11；calPickS = 已点的开始日期(ms)；calHover = 悬停预览日期(ms)
+function calOpen(){
+  var f = E.parseDateLike($('#sumFrom').value);
+  var base = f != null ? new Date(f) : new Date();
+  calY = base.getFullYear(); calM = base.getMonth(); calPickS = null; calHover = null;
+  $('#calPanel').hidden = false;
+  calRender();
+}
+function calRender(){
+  calHover = null;                                                // 重建网格后悬停状态失效
+  var p = $('#calPanel');
+  var lead = (new Date(calY, calM, 1).getDay() + 6) % 7;          // 周一开头的前置空格
+  var dim = new Date(calY, calM + 1, 0).getDate();
+  var html = '<div class="calHead"><button type="button" class="calNav" id="calPrev">‹</button>' +
+    '<b>' + calY + ' 年 ' + (calM + 1) + ' 月</b>' +
+    '<button type="button" class="calNav" id="calNext">›</button></div>' +
+    '<div class="calGrid">' +
+    ['一','二','三','四','五','六','日'].map(function(w){ return '<span class="calWd">' + w + '</span>'; }).join('');
+  for (var i = 0; i < lead; i++) html += '<span></span>';
+  for (var d = 1; d <= dim; d++){
+    var ms = new Date(calY, calM, d).getTime();
+    var cls = 'calD';
+    if (calPickS != null && ms === calPickS) cls += ' ep';        // 已选开始日（或当次点选的端点）
+    else if (calPickS != null && ms > calPickS) cls += ' inR';    // 开始之后的日期浅紫预览
+    html += '<span class="' + cls + '" data-ms="' + ms + '">' + d + '</span>';
+  }
+  html += '</div><div class="calHint">' + (calPickS == null ? '点第 1 个日期 = 开始' : '再点 1 个日期 = 结束') + '</div>';
+  p.innerHTML = html;
+  $('#calPrev').onclick = function(){ calM--; if (calM < 0){ calM = 11; calY--; } calRender(); };
+  $('#calNext').onclick = function(){ calM++; if (calM > 11){ calM = 0; calY++; } calRender(); };
+  Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
+    el.onclick = function(){
+      var ms = +el.getAttribute('data-ms');
+      if (calPickS == null || ms <= calPickS){ calPickS = ms; calRender(); return; }   // 首点/点到更早日期 → 重设开始
+      applySumRange(calPickS, ms);
+    };
+  });
+}
+function applySumRange(sMs, eMs){
+  var sm = sumManual(ST.pid);
+  $('#sumFrom').value = sumYmd(sMs);
+  $('#sumTo').value = sumYmd(eMs);
+  sm.cs = $('#sumFrom').value; sm.ce = $('#sumTo').value;
+  saveSumManual(ST.pid, sm);
+  $('#calPanel').hidden = true;
+  renderSummary();                                                // renderSummary 内会 syncRangeBtn
+}
+/* 悬停预览（2026-09-21）：选完开始后，鼠标扫过的日期实时当"预览结束"，中间日期浅紫铺开 */
+function calUpdateHi(){
+  var p = $('#calPanel'); if (!p) return;
+  var end = (calPickS != null && calHover != null && calHover > calPickS) ? calHover : null;
+  Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
+    var m = +el.getAttribute('data-ms');
+    var cls = 'calD';
+    if (m === calPickS || (end != null && m === end)) cls += ' ep';
+    else if (calPickS != null && end != null && m > calPickS && m < end) cls += ' inR';
+    el.className = cls;
+  });
+  var hint = p.querySelector('.calHint');
+  if (hint) hint.textContent = calPickS == null ? '点第 1 个日期 = 开始'
+    : (end != null ? '预览 ' + sumYmd(calPickS) + ' ~ ' + sumYmd(end) + '，点击确认'
+    : (calHover != null && calHover < calPickS ? '点更早日期 = 重设开始' : '再点 1 个日期 = 结束'));
+}
+$('#sumRangeBtn').onclick = function(){
+  var p = $('#calPanel');
+  if (p.hidden) calOpen(); else p.hidden = true;
+};
+/* 悬停预览监听：挂在 #calPanel 上做事件委托，innerHTML 重建也不丢失 */
+$('#calPanel').addEventListener('mouseover', function(ev){
+  var el = ev.target.closest ? ev.target.closest('.calD') : null;
+  if (!el) return;
+  var m = +el.getAttribute('data-ms');
+  if (m !== calHover){ calHover = m; calUpdateHi(); }
+});
+$('#calPanel').addEventListener('mouseleave', function(){
+  if (calHover != null){ calHover = null; calUpdateHi(); }
+});
+document.addEventListener('click', function(ev){
+  var p = $('#calPanel');
+  if (!p || p.hidden) return;
+  /* 日期/翻月点击会重建 innerHTML，被点元素已脱离 DOM，closest 查不到祖先；
+     必须用 composedPath（分发时固定的路径）判断点击来源 */
+  var path = ev.composedPath ? ev.composedPath() : [];
+  if (path.indexOf(p) >= 0 || path.indexOf($('#sumRangeBtn')) >= 0) return;
+  if (ev.target.closest && (ev.target.closest('#calPanel') || ev.target.closest('#sumRangeBtn'))) return;
+  p.hidden = true;                                                // 点面板外关闭
+});
 $('#sumBody').addEventListener('click', function(ev){
   var sp = ev.target.closest ? ev.target.closest('.snum') : null;
   if (!sp || sp.querySelector('input')) return;
@@ -3170,13 +3339,13 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260920c',
+  ver: 'v20260920d',
   date: '2026-09-20',
-  sum: '新增「用药周期」按患者自定义：皮科等周期特殊的患者可单独调整每盒天数，计算全面跟随',
+  sum: '整体小结「周期」改为日历选择：一个日历里点两下（开始+结束）即可定任意统计区间',
   items: [
+    '📅 <b>周期日历</b>：整体小结的周期不再用两个日期框，点「📅」打开日历——第 1 次点击选开始日期、第 2 次点击选结束日期，区间立刻生效并自动重算小结；上周/本周/下周快捷按钮不变',
     '⏱️ <b>新增「用药周期(天)」列</b>：患者明细里直接输入该患者的每盒天数（留空=跟随品种默认），理论下次购药、存续状态、小结统计（含按计划/提前/延长周期拆分）全部按自定义值计算；导出 Excel 同步新增该列',
     '🛡️ <b>修复「导入清空历史」重大问题</b>：导入前自动先加载相关品种的完整历史再合并新数据；加载失败则中止导入，绝不覆盖服务器',
-    '🛑 <b>修复导入模式残留</b>：切换品种瞬间数据池尚未加载完时，导入模式会被错误设成「全量替换」——现在池加载完成后自动校正为「增量追加」，合并前也按真实池量重新推导',
     '⚠️ <b>数据恢复提示</b>：今天的导入曾覆盖 博瑞纳/希必可/择捷美/贝赋/瑞福 五个品种池的历史。请重新导入这五个品种的<b>完整历史底表</b>（增量追加会自动去重）'
   ]
 };
@@ -3229,7 +3398,7 @@ var TOUR = [
   { t: '统计卡', d: '在治 / 断药预警 / 脱落人数一眼看清。点卡片可以直接筛出对应的那批患者。', sel: '#kpis' },
   { t: '患者明细表', d: '一行一位患者。部分格子可以直接点击填写：临床诊断、备注、实际下次购药、用药周期——填完自动保存，填错了点「撤回」。', sel: '#tb' },
   { t: '列设置', d: '表格太宽？点「列设置 ▾」自由勾选想看的列：用不到的随访列、支付方式等都可以关掉，选择会自动记住，下次打开还是你的配置。', sel: function(){ var el = document.querySelector('#colSetD'); return el || null; } },
-  { t: '整体小结', d: '下面的橙色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；周期区间可以手工改。导入数据后这里才有统计。', sel: '#sumCard' },
+  { t: '整体小结', d: '下面的橙色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；点「周期」的日历按钮，第 1 次点击选开始、第 2 次点击选结束日期，也能用上周/本周/下周快捷切换。导入数据后这里才有统计。', sel: '#sumCard' },
   { t: '导出 Excel', d: '最后一步：点「导出 Excel」，把当前患者的用药信息（购药时间/数量、理论下次购药、存续状态、诊断、备注等）导成表格留档或发给药师。姓名/电话跟随脱敏开关，发出去之前记得先开脱敏。', sel: function(){ var el = document.querySelector('#btnCsv'); return el || null; } },
   { t: '完成！', d: '点「导入新数据」选择药房系统的销售 Excel，就能开始用了。更详细的图文教程，见配套的「工作台使用教程.html」。', sel: null }
 ];
