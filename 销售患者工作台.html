@@ -445,6 +445,7 @@
       </select>
       <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
       <button id="btnDelSel" hidden style="color:var(--rose);border-color:var(--rose)" title="删除选中的患者及其全部购药记录（本品种）；删除前自动留快照，可用「撤回」恢复">删除选中患者</button>
+      <button id="btnClearSel" hidden title="一键取消所有选中（也可按 Esc 键）">取消选择</button>
       <button id="btnTour" title="在真实界面上带你认识每个部分（随时可跳过）">? 新手引导</button>
       <details id="colSetD" class="colset">
         <summary title="选择要显示的列">列设置 ▾</summary>
@@ -2969,13 +2970,28 @@ $('#tb').addEventListener('click', function(ev){
   else { tr.classList.add('row-sel'); ST.rowSelKeys[key] = true; }
   updateDelSelBtn();
 });
-/* 选中人数驱动「删除选中患者」按钮的显隐与文案 */
+/* 选中人数驱动「删除选中患者」「取消选择」按钮的显隐与文案 */
 function updateDelSelBtn(){
-  var b = $('#btnDelSel'); if (!b) return;
+  var b = $('#btnDelSel'), c = $('#btnClearSel');
   var n = Object.keys(ST.rowSelKeys || {}).length;
-  b.hidden = !n;
-  b.textContent = n ? '删除选中患者(' + n + ')' : '删除选中患者';
+  if (b){ b.hidden = !n; b.textContent = n ? '删除选中患者(' + n + ')' : '删除选中患者'; }
+  if (c) c.hidden = !n;
 }
+/* 一键取消所有选中（2026-09-23）：含被筛选/搜索隐藏的行；Esc 同效 */
+function clearRowSel(){
+  ST.rowSelKeys = {};
+  Array.prototype.forEach.call(document.querySelectorAll('#tb tr.row-sel'), function(r){ r.classList.remove('row-sel'); });
+  updateDelSelBtn();
+}
+$('#btnClearSel').onclick = clearRowSel;
+document.addEventListener('keydown', function(ev){
+  if (ev.key === 'Escape' && !$('#sumOvl').hidden) return;   // 弹窗打开时 Esc 归弹窗管
+  if (ev.key === 'Escape' && Object.keys(ST.rowSelKeys || {}).length){
+    var t = ev.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;  // 编辑框里 Esc 不抢
+    clearRowSel();
+  }
+});
 
 /* ---------- 删除选中患者（2026-09-22）----------
    明细表一行 = 一个聚合患者（底表里可能有多条购药记录）。
