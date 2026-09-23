@@ -129,9 +129,9 @@
   .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:var(--violet);font-weight:700;
     border:1px solid var(--line);border-radius:6px;padding:2px 4px;text-align:center;background:#fff}
   .sumDaysLab input:focus{outline:none;border-color:var(--violet)}
-  /* 周期日历（2026-09-20）：一个日历面板选起止日期，替代两个原生日期框 */
-  .sumRangeWrap{position:relative}
-  #calPanel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--card);
+  /* 区间日历（2026-09-20 首版，2026-09-23 抽成通用组件）：一个日历面板选起止日期 */
+  .calAnchor{position:relative}
+  .calPanel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--card);
     border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(90,80,130,.16);
     padding:10px;width:252px;user-select:none}
   .calHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -146,6 +146,10 @@
   .calD.inR{background:var(--violet-l)}
   .calD.ep{background:var(--violet);color:#fff;font-weight:700}
   .calHint{font-size:11px;color:var(--ink3);margin-top:6px;text-align:center}
+  .calFoot{display:flex;justify-content:flex-end;margin-top:2px}
+  .calClear{border:none;background:none;cursor:pointer;font-size:11.5px;color:var(--rose);
+    padding:2px 8px;border-radius:8px}
+  .calClear:hover{background:var(--rose-l)}
   .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid var(--violet);
     background:var(--violet-l);color:var(--violet);cursor:pointer}
   .sumCopy:hover{background:var(--violet);color:#fff}
@@ -377,11 +381,11 @@
         <button type="button" class="sumBtn on" data-cy="0">本周</button>
         <button type="button" class="sumBtn" data-cy="1">下周</button>
       </span>
-      <span class="sumDaysLab sumRangeWrap">周期
+      <span class="sumDaysLab calAnchor">周期
         <button type="button" id="sumRangeBtn" class="sumBtn" title="点击打开日历：第 1 次点击选开始日期，第 2 次点击选结束日期">📅 <span id="sumRangeTxt"></span></button>
         <input type="date" id="sumFrom" hidden>
         <input type="date" id="sumTo" hidden>
-        <div id="calPanel" hidden></div>
+        <div id="calPanel" class="calPanel" hidden></div>
       </span>
       <span class="grow"></span>
       <button type="button" id="btnCopySum" class="sumCopy" title="复制小结文字，可直接粘贴到微信/群">复制小结</button>
@@ -422,11 +426,17 @@
         <option>在治</option><option>断药预警</option><option>脱落</option></select>
       <select id="fStore"><option value="">全部药房</option></select>
       <select id="fHosp"><option value="">全部医院</option></select>
-      <label class="dr">理论下次购药
-        <input type="date" id="fWinFrom" placeholder="起"> ～ <input type="date" id="fWinTo" placeholder="止">
+      <label class="dr calAnchor" title="按理论下次购药日期筛选：点日历，第 1 次点击选开始、第 2 次点击选结束">理论下次购药
+        <button type="button" id="fWinBtn" class="sumBtn" title="点击打开日历：第 1 次点击选开始日期，第 2 次点击选结束日期；面板里可一键清除">📅 <span id="fWinTxt">全部</span></button>
+        <input type="date" id="fWinFrom" hidden>
+        <input type="date" id="fWinTo" hidden>
+        <div id="calWin" class="calPanel" hidden></div>
       </label>
-      <label class="dr" title="按患者首次购药日期筛选（新患/老患核查常用）">首购日期
-        <input type="date" id="fFirstFrom" placeholder="起"> ～ <input type="date" id="fFirstTo" placeholder="止">
+      <label class="dr calAnchor" title="按患者首次购药日期筛选（新患/老患核查常用）：点日历选择区间">首购日期
+        <button type="button" id="fFirstBtn" class="sumBtn" title="点击打开日历：第 1 次点击选开始日期，第 2 次点击选结束日期；面板里可一键清除">📅 <span id="fFirstTxt">全部</span></button>
+        <input type="date" id="fFirstFrom" hidden>
+        <input type="date" id="fFirstTo" hidden>
+        <div id="calFirst" class="calPanel" hidden></div>
       </label>
       <select id="fFill">
         <option value="">全部填写状态</option>
@@ -2266,6 +2276,7 @@ function cellOf(k, p, m, pay, st, mask){
 }
 
 function renderTable(){
+  syncFilterCalBtns();                          // 日期筛选按钮文字跟随（撤回/换品种重置后同步）
   var list = filtered();
   var mask = $('#mask').checked;
   var vcols = COLS.filter(function(c){ return VIS[c.k] !== false; });
@@ -3012,10 +3023,12 @@ function clearRowSel(){
 $('#btnClearSel').onclick = clearRowSel;
 document.addEventListener('keydown', function(ev){
   if (ev.key === 'Escape' && !$('#sumOvl').hidden) return;   // 弹窗打开时 Esc 归弹窗管
-  if (ev.key === 'Escape' && Object.keys(ST.rowSelKeys || {}).length){
+  if (ev.key === 'Escape'){
+    var calOpen = CALS.some(function(c){ return !c.panel.hidden; });
+    if (calOpen){ CALS.forEach(function(c){ c.panel.hidden = true; }); return; }   // 日历开着 → 先只关日历
     var t = ev.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;  // 编辑框里 Esc 不抢
-    clearRowSel();
+    if (Object.keys(ST.rowSelKeys || {}).length) clearRowSel();
   }
 });
 
@@ -3082,97 +3095,147 @@ $('#sumFrom').onchange = $('#sumTo').onchange = function(){
   renderSummary();
 };
 
-/* ---------- 周期日历（2026-09-20）：一个日历选起止日期；隐藏的 sumFrom/sumTo 仍是数据源，统计逻辑零改动 ---------- */
+/* ---------- 通用区间日历组件（2026-09-20 首版，2026-09-23 抽成工厂）----------
+   小结周期 + 明细表两个筛选（理论下次购药/首购日期）共用同一交互：
+   点第 1 个日期 = 开始 → 悬停实时预览区间 → 第 2 个日期 = 结束确认；点面板外/Esc 关闭。
+   o = { panel, btn, get:()->[s,e], apply:(s,e), clearable?, idPrev?, idNext? }
+   隐藏的 input[type=date] 仍是数据源，筛选/统计逻辑零改动 */
+var CALS = [];
+function mkRangeCal(o){
+  var Y = 0, M = 0, pickS = null, hover = null;                   // M: 0-11；pickS = 已点的开始日期(ms)；hover = 悬停预览日期(ms)
+  var p = o.panel;
+  var inst = { panel: p, btn: o.btn };
+  function render(){
+    hover = null;                                                 // 重建网格后悬停状态失效
+    var lead = (new Date(Y, M, 1).getDay() + 6) % 7;              // 周一开头的前置空格
+    var dim = new Date(Y, M + 1, 0).getDate();
+    var html = '<div class="calHead"><button type="button" class="calNav"' + (o.idPrev ? ' id="' + o.idPrev + '"' : '') + ' data-nav="-1">‹</button>' +
+      '<b>' + Y + ' 年 ' + (M + 1) + ' 月</b>' +
+      '<button type="button" class="calNav"' + (o.idNext ? ' id="' + o.idNext + '"' : '') + ' data-nav="1">›</button></div>' +
+      '<div class="calGrid">' +
+      ['一','二','三','四','五','六','日'].map(function(w){ return '<span class="calWd">' + w + '</span>'; }).join('');
+    for (var i = 0; i < lead; i++) html += '<span></span>';
+    for (var d = 1; d <= dim; d++){
+      var ms = new Date(Y, M, d).getTime();
+      var cls = 'calD';
+      if (pickS != null && ms === pickS) cls += ' ep';            // 已选开始日（或当次点选的端点）
+      else if (pickS != null && ms > pickS) cls += ' inR';        // 开始之后的日期浅紫预览
+      html += '<span class="' + cls + '" data-ms="' + ms + '">' + d + '</span>';
+    }
+    html += '</div><div class="calHint">' + (pickS == null ? '点第 1 个日期 = 开始' : '再点 1 个日期 = 结束') + '</div>';
+    if (o.clearable) html += '<div class="calFoot"><button type="button" class="calClear" title="清空该筛选，恢复全部">清除筛选</button></div>';
+    p.innerHTML = html;
+    Array.prototype.forEach.call(p.querySelectorAll('.calNav'), function(b){
+      b.onclick = function(){
+        M += +b.getAttribute('data-nav');
+        if (M < 0){ M = 11; Y--; }
+        if (M > 11){ M = 0; Y++; }
+        render();
+      };
+    });
+    Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
+      el.onclick = function(){
+        var ms = +el.getAttribute('data-ms');
+        if (pickS == null || ms <= pickS){ pickS = ms; render(); return; }   // 首点/点到更早日期 → 重设开始
+        p.hidden = true;
+        o.apply(sumYmd(pickS), sumYmd(ms));
+      };
+    });
+    var cc = p.querySelector('.calClear');
+    if (cc) cc.onclick = function(){ p.hidden = true; o.apply('', ''); };
+  }
+  /* 悬停预览：选完开始后，鼠标扫过的日期实时当"预览结束"，中间日期浅紫铺开 */
+  function updateHi(){
+    var end = (pickS != null && hover != null && hover > pickS) ? hover : null;
+    Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
+      var m = +el.getAttribute('data-ms');
+      var cls = 'calD';
+      if (m === pickS || (end != null && m === end)) cls += ' ep';
+      else if (pickS != null && end != null && m > pickS && m < end) cls += ' inR';
+      el.className = cls;
+    });
+    var hint = p.querySelector('.calHint');
+    if (hint) hint.textContent = pickS == null ? '点第 1 个日期 = 开始'
+      : (end != null ? '预览 ' + sumYmd(pickS) + ' ~ ' + sumYmd(end) + '，点击确认'
+      : (hover != null && hover < pickS ? '点更早日期 = 重设开始' : '再点 1 个日期 = 结束'));
+  }
+  function open(){
+    var s = o.get()[0];
+    var f = s ? E.parseDateLike(s) : null;
+    var base = (f != null && !isNaN(new Date(f).getTime())) ? new Date(f) : new Date();
+    Y = base.getFullYear(); M = base.getMonth(); pickS = null; hover = null;
+    p.hidden = false;
+    render();
+  }
+  o.btn.onclick = function(){ if (p.hidden) open(); else p.hidden = true; };
+  /* 面板在 <label> 内时，点击子元素冒泡到 label 会合成对内部按钮的点击（面板被误关/重开）；
+     统一吞掉面板内点击的默认行为 */
+  p.addEventListener('click', function(ev){ ev.preventDefault(); });
+  /* 悬停监听：事件委托挂在面板上，innerHTML 重建也不丢失 */
+  p.addEventListener('mouseover', function(ev){
+    var el = ev.target.closest ? ev.target.closest('.calD') : null;
+    if (!el) return;
+    var m = +el.getAttribute('data-ms');
+    if (m !== hover){ hover = m; updateHi(); }
+  });
+  p.addEventListener('mouseleave', function(){
+    if (hover != null){ hover = null; updateHi(); }
+  });
+  CALS.push(inst);
+}
 function syncRangeBtn(){
   var t = $('#sumRangeTxt'); if (!t) return;
   t.textContent = ($('#sumFrom').value || '…') + ' ~ ' + ($('#sumTo').value || '…');
 }
-var calY = 0, calM = 0, calPickS = null, calHover = null;         // calM: 0-11；calPickS = 已点的开始日期(ms)；calHover = 悬停预览日期(ms)
-function calOpen(){
-  var f = E.parseDateLike($('#sumFrom').value);
-  var base = f != null ? new Date(f) : new Date();
-  calY = base.getFullYear(); calM = base.getMonth(); calPickS = null; calHover = null;
-  $('#calPanel').hidden = false;
-  calRender();
+function fRangeTxt(s, e){
+  return (s || e) ? ((s || '…') + ' ~ ' + (e || '…')) : '全部';
 }
-function calRender(){
-  calHover = null;                                                // 重建网格后悬停状态失效
-  var p = $('#calPanel');
-  var lead = (new Date(calY, calM, 1).getDay() + 6) % 7;          // 周一开头的前置空格
-  var dim = new Date(calY, calM + 1, 0).getDate();
-  var html = '<div class="calHead"><button type="button" class="calNav" id="calPrev">‹</button>' +
-    '<b>' + calY + ' 年 ' + (calM + 1) + ' 月</b>' +
-    '<button type="button" class="calNav" id="calNext">›</button></div>' +
-    '<div class="calGrid">' +
-    ['一','二','三','四','五','六','日'].map(function(w){ return '<span class="calWd">' + w + '</span>'; }).join('');
-  for (var i = 0; i < lead; i++) html += '<span></span>';
-  for (var d = 1; d <= dim; d++){
-    var ms = new Date(calY, calM, d).getTime();
-    var cls = 'calD';
-    if (calPickS != null && ms === calPickS) cls += ' ep';        // 已选开始日（或当次点选的端点）
-    else if (calPickS != null && ms > calPickS) cls += ' inR';    // 开始之后的日期浅紫预览
-    html += '<span class="' + cls + '" data-ms="' + ms + '">' + d + '</span>';
+function syncFilterCalBtns(){
+  var t1 = $('#fWinTxt'), t2 = $('#fFirstTxt');
+  if (t1) t1.textContent = fRangeTxt($('#fWinFrom').value, $('#fWinTo').value);
+  if (t2) t2.textContent = fRangeTxt($('#fFirstFrom').value, $('#fFirstTo').value);
+}
+/* 实例 1：整体小结周期（区间必填，快捷按钮负责重置，无清除入口） */
+mkRangeCal({
+  panel: $('#calPanel'), btn: $('#sumRangeBtn'), idPrev: 'calPrev', idNext: 'calNext',
+  get: function(){ return [$('#sumFrom').value, $('#sumTo').value]; },
+  apply: function(s, e){
+    var sm = sumManual(ST.pid);
+    $('#sumFrom').value = s; $('#sumTo').value = e;
+    sm.cs = s; sm.ce = e;
+    saveSumManual(ST.pid, sm);
+    renderSummary();                                              // renderSummary 内会 syncRangeBtn
   }
-  html += '</div><div class="calHint">' + (calPickS == null ? '点第 1 个日期 = 开始' : '再点 1 个日期 = 结束') + '</div>';
-  p.innerHTML = html;
-  $('#calPrev').onclick = function(){ calM--; if (calM < 0){ calM = 11; calY--; } calRender(); };
-  $('#calNext').onclick = function(){ calM++; if (calM > 11){ calM = 0; calY++; } calRender(); };
-  Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
-    el.onclick = function(){
-      var ms = +el.getAttribute('data-ms');
-      if (calPickS == null || ms <= calPickS){ calPickS = ms; calRender(); return; }   // 首点/点到更早日期 → 重设开始
-      applySumRange(calPickS, ms);
-    };
-  });
-}
-function applySumRange(sMs, eMs){
-  var sm = sumManual(ST.pid);
-  $('#sumFrom').value = sumYmd(sMs);
-  $('#sumTo').value = sumYmd(eMs);
-  sm.cs = $('#sumFrom').value; sm.ce = $('#sumTo').value;
-  saveSumManual(ST.pid, sm);
-  $('#calPanel').hidden = true;
-  renderSummary();                                                // renderSummary 内会 syncRangeBtn
-}
-/* 悬停预览（2026-09-21）：选完开始后，鼠标扫过的日期实时当"预览结束"，中间日期浅紫铺开 */
-function calUpdateHi(){
-  var p = $('#calPanel'); if (!p) return;
-  var end = (calPickS != null && calHover != null && calHover > calPickS) ? calHover : null;
-  Array.prototype.forEach.call(p.querySelectorAll('.calD'), function(el){
-    var m = +el.getAttribute('data-ms');
-    var cls = 'calD';
-    if (m === calPickS || (end != null && m === end)) cls += ' ep';
-    else if (calPickS != null && end != null && m > calPickS && m < end) cls += ' inR';
-    el.className = cls;
-  });
-  var hint = p.querySelector('.calHint');
-  if (hint) hint.textContent = calPickS == null ? '点第 1 个日期 = 开始'
-    : (end != null ? '预览 ' + sumYmd(calPickS) + ' ~ ' + sumYmd(end) + '，点击确认'
-    : (calHover != null && calHover < calPickS ? '点更早日期 = 重设开始' : '再点 1 个日期 = 结束'));
-}
-$('#sumRangeBtn').onclick = function(){
-  var p = $('#calPanel');
-  if (p.hidden) calOpen(); else p.hidden = true;
-};
-/* 悬停预览监听：挂在 #calPanel 上做事件委托，innerHTML 重建也不丢失 */
-$('#calPanel').addEventListener('mouseover', function(ev){
-  var el = ev.target.closest ? ev.target.closest('.calD') : null;
-  if (!el) return;
-  var m = +el.getAttribute('data-ms');
-  if (m !== calHover){ calHover = m; calUpdateHi(); }
 });
-$('#calPanel').addEventListener('mouseleave', function(){
-  if (calHover != null){ calHover = null; calUpdateHi(); }
+/* 实例 2：明细筛选 · 理论下次购药 */
+mkRangeCal({
+  panel: $('#calWin'), btn: $('#fWinBtn'), clearable: true,
+  get: function(){ return [$('#fWinFrom').value, $('#fWinTo').value]; },
+  apply: function(s, e){
+    $('#fWinFrom').value = s; $('#fWinTo').value = e;
+    syncFilterCalBtns(); renderTable();
+  }
 });
+/* 实例 3：明细筛选 · 首购日期 */
+mkRangeCal({
+  panel: $('#calFirst'), btn: $('#fFirstBtn'), clearable: true,
+  get: function(){ return [$('#fFirstFrom').value, $('#fFirstTo').value]; },
+  apply: function(s, e){
+    $('#fFirstFrom').value = s; $('#fFirstTo').value = e;
+    syncFilterCalBtns(); renderTable();
+  }
+});
+/* 点面板外关闭（所有实例统一）；日期/翻月点击会重建 innerHTML，被点元素已脱离 DOM，
+   closest 查不到祖先——必须用 composedPath（分发时固定的路径）判断点击来源 */
 document.addEventListener('click', function(ev){
-  var p = $('#calPanel');
-  if (!p || p.hidden) return;
-  /* 日期/翻月点击会重建 innerHTML，被点元素已脱离 DOM，closest 查不到祖先；
-     必须用 composedPath（分发时固定的路径）判断点击来源 */
-  var path = ev.composedPath ? ev.composedPath() : [];
-  if (path.indexOf(p) >= 0 || path.indexOf($('#sumRangeBtn')) >= 0) return;
-  if (ev.target.closest && (ev.target.closest('#calPanel') || ev.target.closest('#sumRangeBtn'))) return;
-  p.hidden = true;                                                // 点面板外关闭
+  CALS.forEach(function(c){
+    var p = c.panel;
+    if (p.hidden) return;
+    var path = ev.composedPath ? ev.composedPath() : [];
+    if (path.indexOf(p) >= 0 || path.indexOf(c.btn) >= 0) return;
+    if (ev.target.closest && (ev.target.closest('#' + p.id) || ev.target.closest('#' + c.btn.id))) return;
+    p.hidden = true;
+  });
 });
 $('#sumBody').addEventListener('click', function(ev){
   var sp = ev.target.closest ? ev.target.closest('.snum') : null;
