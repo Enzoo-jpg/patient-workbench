@@ -292,7 +292,7 @@
 
 <div id="drop">
   <h2>载入销售数据</h2>
-  <p>把 .xlsx 文件拖到这里，或点击选择</p>
+  <p>把 销售底表 / 随访任务表 (.xlsx) 拖到这里自动识别，或点击选择</p>
   <div class="hint">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br>
   患者池与已填写的诊断/备注都保存在本机浏览器，下次打开无需再放文件。</div>
   <div id="dropStatus" style="margin-top:10px;font-size:14.5px;color:#0F6E56;font-weight:600"></div>
@@ -2743,10 +2743,10 @@ function handleFile(file){
 
 /* ---------- 按钮悬浮注释 ---------- */
 var TIPS = {
-  '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置。'],
+  '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置（<b>随访任务表拖进来也会自动识别</b>走随访导入）。'],
   '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
-  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
+  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>也可以直接把随访文件<b>拖到页面任意位置</b>，自动识别为随访导入。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
   '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
@@ -2887,15 +2887,41 @@ $('#file').onchange = function(){ if (this.files[0]) handleFile(this.files[0]); 
 });
 $('#drop').addEventListener('drop', function(e){
   var f = e.dataTransfer.files[0];
-  if (f) handleFile(f);
+  if (f) routeDroppedFile(f);
 });
 window.addEventListener('dragover', function(e){ e.preventDefault(); });
 /* 数据载入后拖放区已隐藏：拖到页面任意位置也能再次导入 */
 window.addEventListener('drop', function(e){
   e.preventDefault();
   var f = e.dataTransfer && e.dataTransfer.files[0];
-  if (f) handleFile(f);
+  if (f) routeDroppedFile(f);
 });
+
+/* ---------- 拖拽智能分流（2026-09-23）：随访任务表 / 销售底表自动识别 ----------
+   读首个工作表表头：同时命中随访特征列（联系电话类 + 产品类）→ 走随访导入；
+   否则走销售底表流程。销售表无「联系电话/产品」列（是会员电话/商品名称），不会误判。
+   老格式（Excel 2.x/BIFF2-5）解析失败时按文件名含「随访」兜底。 */
+function sniffIsFollow(buf){
+  var wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  var sh = wb.Sheets[wb.SheetNames[0]];
+  var grid = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '' });
+  var hdr = (grid[0] || []).map(function(h){ return String(h == null ? '' : h).trim(); });
+  var fuPhone = ['联系电话', '电话号码'], fuProd = ['产品', '药品名称'];
+  function has(cands){
+    return hdr.some(function(h){ return !!h && cands.some(function(c){ return h === c || h.indexOf(c) === 0; }); });
+  }
+  return has(fuPhone) && has(fuProd);
+}
+function routeDroppedFile(f){
+  var fr = new FileReader();
+  fr.onload = function(){
+    var isFu = null;
+    try { isFu = sniffIsFollow(new Uint8Array(fr.result)); } catch(e){ isFu = null; }
+    if (isFu === null) isFu = /随访/.test(f.name);      // 解析失败按文件名兜底
+    if (isFu) importFollow(f); else handleFile(f);
+  };
+  fr.readAsArrayBuffer(f);
+}
 /* 工具栏"导入新数据"按钮 */
 $('#btnImport').onclick = function(){ $('#file').click(); };
 /* 工具栏"导入随访"按钮 */
@@ -3477,7 +3503,8 @@ try { document.getElementById('tourBall').hidden = false; } catch(e){}
 
 /* 测试钩子：仅供自动化回归测试触达内部状态与函数，不影响正常使用（2026-09-20） */
 window.__wb = { ST: ST, PDS: PDS, BE: BE, applyImport: applyImport, persistPid: persistPid,
-                snapshotState: snapshotState, undoLast: undoLast, switchProduct: switchProduct };
+                snapshotState: snapshotState, undoLast: undoLast, switchProduct: switchProduct,
+                routeDroppedFile: routeDroppedFile, sniffIsFollow: sniffIsFollow };
 })();
 </script>
 </body>
