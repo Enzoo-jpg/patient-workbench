@@ -3051,6 +3051,22 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn){
   var dataJson = JSON.stringify({ rows: rows }).replace(/<\//g, '<\\/');   // 防结束标签样文本提前闭合脚本
   var today = sumYmd(E.todayStartMs(null));
   var maskTag = (maskOn === false) ? ' · 未脱敏（仅限内部使用）' : ' · 已脱敏';
+  /* 顶部状态总结卡（2026-09-24）：患者总数/在治/断药预警/脱落 + 占比，口径与工作台 KPI 一致 */
+  var cSt = { '在治': 0, '断药预警': 0, '脱落': 0 };
+  rows.forEach(function(r){ cSt[r.st] = (cSt[r.st] || 0) + 1; });
+  var pct = function(c){ return rows.length ? (Math.round(c / rows.length * 1000) / 10) + '%' : '—'; };
+  var kpiCard = function(cls, num, lab){ return '<div class="kc ' + cls + '"><b>' + num + '</b><span>' + lab + '</span></div>'; };
+  var kpis = kpiCard('', rows.length, '患者总数') +
+    kpiCard('g', cSt['在治'], '在治 ' + pct(cSt['在治'])) +
+    kpiCard('y', cSt['断药预警'], '断药预警 ' + pct(cSt['断药预警'])) +
+    kpiCard('r', cSt['脱落'], '脱落 ' + pct(cSt['脱落']));
+  /* 底表销售时间跨度：全部患者购药时间的最早~最晚（数据底表的时间维度） */
+  var minMs = null, maxMs = null;
+  res.patients.forEach(function(p){
+    if (p.firstBuyMs != null && (minMs == null || p.firstBuyMs < minMs)) minMs = p.firstBuyMs;
+    if (p.lastBuyMs != null && (maxMs == null || p.lastBuyMs > maxMs)) maxMs = p.lastBuyMs;
+  });
+  var spanTxt = (minMs != null && maxMs != null) ? (sumYmd(minMs) + ' ~ ' + sumYmd(maxMs)) : '—';
   var ths = ['姓名','电话','存续状态','理论下次购药','最后购药','累计盒数','首次购药','末次医院','医生','药房','临床诊断','备注']
     .map(function(t){ return '<th>' + t + '</th>'; }).join('');
   /* 注意：script 开/闭标签必须拼接书写——字面的结束标签出现在模板字符串里会提前闭合外层脚本块 */
@@ -3061,7 +3077,12 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn){
     ':root{--ink:#3A3550;--ink2:#6B6480;--line:#EAE4F2;--bg:#FAF8FC}\n' +
     '*{box-sizing:border-box}body{margin:0;font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink)}\n' +
     '.wrap{max-width:1120px;margin:0 auto;padding:24px 16px 60px}\n' +
-    'h1{font-size:20px;margin:0 0 4px}.sub{color:var(--ink2);font-size:12.5px;margin-bottom:16px}\n' +
+    'h1{font-size:20px;margin:0 0 4px}.sub{color:var(--ink2);font-size:12.5px;margin-bottom:12px}\n' +
+    '.kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}\n' +
+    '.kc{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 2px 8px rgba(124,107,175,.06)}\n' +
+    '.kc b{display:block;font-size:20px;line-height:1.3}.kc span{font-size:12px;color:var(--ink2)}\n' +
+    '.kc.g b{color:#2F7D46}.kc.y b{color:#9C6B1B}.kc.r b{color:#B04A4A}\n' +
+    '.span{color:var(--ink2);font-size:12.5px;margin-bottom:14px}.span b{color:var(--ink)}\n' +
     '.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}\n' +
     'input,select{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}\n' +
     '#q{width:250px}.cnt{color:var(--ink2);font-size:12.5px}\n' +
@@ -3076,6 +3097,8 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn){
     '</style>\n</head>\n<body><div class="wrap">\n' +
     '<h1>' + esc(String(name)) + '</h1>\n' +
     '<div class="sub">' + esc(snapProdLabel(pid)) + ' · ' + rows.length + ' 位患者 · ' + (pool || []).length + ' 条购药记录 · 存续状态按导出日 ' + today + ' 计算' + maskTag + ' · 由「销售患者工作台」导出</div>\n' +
+    '<div class="kpis">' + kpis + '</div>\n' +
+    '<div class="span">底表销售时间：<b>' + spanTxt + '</b>（该品种全部购药记录的最早 ~ 最晚销售日期）</div>\n' +
     '<div class="bar"><input id="q" placeholder="搜索姓名 / 电话 / 医院 / 医生 / 备注">' +
     '<select id="fs"><option value="">全部状态</option><option>在治</option><option>断药预警</option><option>脱落</option></select>' +
     '<span class="cnt" id="cnt"></span></div>\n' +
