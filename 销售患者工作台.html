@@ -350,7 +350,7 @@
     <button id="btnBak">导出备份(含数据池)</button>
     <button id="btnRes">导入备份</button>
     <button id="btnCsv">导出 Excel</button>
-    <button id="btnSnap" title="给当前品种的数据池手动存档（可存多份、随时恢复），适合导入新数据或批量删除前留底">📸 快照</button>
+    <button id="btnSnap" title="把当前品种全部患者导出成单文件只读 HTML 分享给别人（已脱敏，浏览器双击打开即看）">📸 快照</button>
     <button id="btnClearPool">清空数据池</button>
     <button id="btnReset">清空填写</button>
     <input type="file" id="bakFile" accept=".json" hidden>
@@ -411,22 +411,6 @@
         <span class="grow"></span>
         <button type="button" id="sumExp" title="导出当前指标的患者名单为 Excel（姓名/电话跟随脱敏开关）">导出名单</button>
         <button type="button" id="sumClose" style="font-size:12px;padding:4px 12px">关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 数据快照：手动存档当前品种数据池，随时恢复（2026-09-24） -->
-  <div class="ovl" id="snapOvl" hidden>
-    <div class="mcard" style="max-width:640px">
-      <h3>数据快照</h3>
-      <div class="msub">给当前品种的数据池手动存一份底（含患者购药记录、诊断/备注、随访数据），可存多份、随时恢复——适合导入新数据或批量删除前留底。快照存在本机浏览器里，最多保留 20 份。</div>
-      <div style="display:flex;gap:8px;align-items:center;margin:10px 0">
-        <input type="text" id="snapName" placeholder="快照名称（留空自动用时间命名）" style="flex:1;font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px">
-        <button type="button" id="snapSave" class="pri" style="font-size:12.5px;padding:5px 14px">💾 存当前</button>
-      </div>
-      <div id="snapList" style="max-height:46vh;overflow:auto"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px">
-        <button type="button" id="snapClose" style="font-size:12px;padding:4px 12px">关闭</button>
       </div>
     </div>
   </div>
@@ -2783,7 +2767,7 @@ var TIPS = {
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
   '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>也可以直接把随访文件<b>拖到页面任意位置</b>，自动识别为随访导入。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
   '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
-  '#btnSnap': ['📸 快照', '给当前品种的数据池<b>手动存档</b>（含购药记录、诊断/备注、随访），可存多份、随时恢复。<br>适合导入新数据或批量删除前留底；恢复前会自动留撤回点。'],
+  '#btnSnap': ['📸 快照', '把当前品种<b>全部患者</b>（忽略筛选）导出成单文件只读 HTML 分享给别人，自动脱敏（姓名/电话打码、医生保留姓）。<br>浏览器双击打开即看；文件不含可编辑数据。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
   '#btnReset': ['清空填写', '删除<b>所有患者</b>的临床诊断、备注、备注日期。<br><b>不会删除</b>销售数据。此操作不可撤销，会先弹窗确认。'],
   '#impMode': ['导入模式', '<b>全量替换</b>：用导入文件整体替换数据池（数据错了重灌一遍就好）<br><b>增量追加</b>：只把新记录加进去，重复的自动跳过<br>默认值自动定：数据池为空时＝全量替换；已有数据时＝增量追加，仍可手动切换。']
@@ -3008,117 +2992,107 @@ $('#btnClearPool').onclick = function(){
   syncImpMode();                                     // 池已空，默认模式回到全量替换
 };
 
-/* ---------- 数据快照（2026-09-24）----------
-   给当前品种数据池手动存档（患者购药记录 + 诊断/备注 + 随访数据），存本机 localStorage，
-   最多 20 份；恢复前自动留撤回点，恢复后立即持久化并重算全页。 */
-var SNAP_KEY = 'patient_workbench_snapshots_v1';
-var SNAP_MAX = 20;
-function loadSnaps(){
-  try { return JSON.parse(localStorage.getItem(SNAP_KEY) || '[]') || []; } catch(e){ return []; }
-}
-function saveSnaps(a){
-  try { localStorage.setItem(SNAP_KEY, JSON.stringify(a)); return true; }
-  catch(e){
-    alert('快照保存失败：浏览器存储空间不足（快照是完整数据池副本，比较占空间）。\n请打开「📸 快照」删掉几份旧的再试。');
-    return false;
-  }
-}
+/* ---------- 快照分享（2026-09-24 简化版）----------
+   点「📸 快照」直接把当前品种全部患者导出成单文件只读 HTML（已脱敏），不再存档；
+   删除/清空/导入等操作仍由「↩ 撤回」机制保护。 */
 function snapProdLabel(pid){
   var L = allProducts();
   for (var i = 0; i < L.length; i++) if (L[i].id === pid) return L[i].label;
   return pid;
 }
-function renderSnapList(){
-  var box = $('#snapList');
-  var list = loadSnaps();
-  if (!list.length){
-    box.innerHTML = '<div style="color:var(--ink3);font-size:12.5px;padding:8px 0">还没有快照。点右上「💾 存当前」给当前品种（' +
-      esc(snapProdLabel(ST.pid)) + '，' + ST.pool.length + ' 位患者）的数据留一份底。</div>';
-    return;
-  }
-  box.innerHTML = list.map(function(s){
-    return '<div style="display:flex;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line);font-size:13px">' +
-      '<div style="flex:1;min-width:0">' +
-        '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b>' + esc(String(s.name || '')) + '</b></div>' +
-        '<div style="color:var(--ink3);font-size:11.5px">' + esc(snapProdLabel(s.pid)) + ' · ' + s.n + ' 位患者 · ' + (s.nm || 0) + ' 条备注 · 存于 ' + new Date(s.ts).toLocaleString() + '</div>' +
-      '</div>' +
-      '<button type="button" class="snapRes" data-id="' + esc(String(s.id)) + '" style="font-size:12px;padding:3px 10px">恢复</button>' +
-      '<button type="button" class="snapDel" data-id="' + esc(String(s.id)) + '" style="font-size:12px;padding:3px 10px;color:var(--rose);border-color:var(--rose)">删</button>' +
-      '</div>';
-  }).join('');
-  Array.prototype.forEach.call(box.querySelectorAll('.snapRes'), function(b){
-    b.onclick = function(){ restoreSnap(b.getAttribute('data-id')); };
+/* 点「📸 快照」= 直接导出当前品种全部患者的只读分享 HTML（2026-09-24 简化：不再存档） */
+$('#btnSnap').onclick = function(){
+  var e = PDS[ST.pid];
+  if (!e || !e.pool.length){ alert('当前品种（' + snapProdLabel(ST.pid) + '）数据池是空的，没有可分享的内容。'); return; }
+  var n = (ST.result && ST.result.patients) ? ST.result.patients.length : e.pool.length;
+  if (!confirm('导出「' + snapProdLabel(ST.pid) + '」全部患者（' + n + ' 位）为单文件分享 HTML？\n\n文件只读、已脱敏（姓名/电话打码、医生保留姓），浏览器双击打开即看，可直接发给别人。\n分享内容为该品种全部患者（忽略当前筛选）。\n如需未脱敏的内部数据，请改用「导出 Excel」并关闭左上角脱敏开关。')) return;
+  var fname = ('患者分享_' + snapProdLabel(ST.pid) + '_' + stamp() + '.html').replace(/[\\/:*?"<>|]/g, '_');
+  download(fname, buildSnapShareHtml(e.pool, e.manual || {}, ST.pid, snapProdLabel(ST.pid) + ' · 患者分享'), 'text/html;charset=utf-8');
+};
+
+/* ---------- 分享 HTML 生成器：单文件只读（2026-09-24）----------
+   与工作台同一引擎口径（E.compute + 人工周期覆盖 + nextActual 优先）在导出时聚合，
+   存续状态按导出日冻结；接收方浏览器双击打开即看，支持搜索/状态筛选，无任何外部依赖。 */
+function buildSnapShareHtml(pool, manual, pid, name, maskOn){
+  var prod = productOf(pid);
+  var res = E.compute(pool || [], {
+    daysPerBox: prod ? prod.daysPerBox : 30,
+    cycleOf: function(key){
+      var m = (manual || {})[key];
+      var c = m ? +m.cycle : null;
+      return (c > 0) ? c : null;
+    }
   });
-  Array.prototype.forEach.call(box.querySelectorAll('.snapDel'), function(b){
-    b.onclick = function(){
-      var id = b.getAttribute('data-id');
-      var s = loadSnaps().filter(function(x){ return String(x.id) === id; })[0];
-      if (!s) return;
-      if (!confirm('删除快照「' + s.name + '」？删除后不可恢复（不影响当前数据）。')) return;
-      saveSnaps(loadSnaps().filter(function(x){ return String(x.id) !== id; }));
-      renderSnapList();
+  manual = manual || {};
+  var rows = res.patients.map(function(p){
+    var m = manual[p.key] || {};
+    var nxMs = p.nextMs;
+    if (m.nextActual){                                   // 人工填写的实际下次购药优先（对齐 effNextMs）
+      var o = E.parseDateLike(m.nextActual);
+      if (o != null) nxMs = o;
+    }
+    var gap = E.todayStartMs(null) - nxMs;               // 状态按导出日冻结
+    var st = gap <= 0 ? '在治' : (gap <= 30 * 86400000 ? '断药预警' : '脱落');
+    var nm = p.name || (p.orderNo ? '订单:' + p.orderNo : '(空)');
+    var mk = maskOn !== false;                           // 默认脱敏，仅显式传 false 才出原文
+    return {
+      nm: mk ? maskName(nm) : nm,
+      ph: mk ? maskPhone(p.phone) : (p.phone || ''),
+      st: st,
+      nx: sumYmd(nxMs), lt: sumYmd(p.lastBuyMs), ft: sumYmd(p.firstBuyMs),
+      qt: p.totalQty || 0,
+      ho: p.hospital || '',
+      dr: mk ? maskName(p.doctor) : (p.doctor || ''),
+      so: p.store || '',
+      dg: m.diag || p.diagSrc || p.indSrc || '',
+      nt: m.note || ''
     };
   });
-}
-$('#btnSnap').onclick = function(){
-  $('#snapName').value = '';
-  renderSnapList();
-  $('#snapOvl').hidden = false;
-};
-$('#snapClose').onclick = function(){ $('#snapOvl').hidden = true; };
-$('#snapOvl').addEventListener('click', function(ev){ if (ev.target === this) this.hidden = true; });
-$('#snapSave').onclick = function(){
-  var e = PDS[ST.pid];
-  if (!e) return;
-  if (!e.pool.length && !confirm('当前品种（' + snapProdLabel(ST.pid) + '）数据池是空的，也要存一份空快照吗？')) return;
-  var list = loadSnaps();
-  if (list.length >= SNAP_MAX){
-    var oldest = list.sort(function(a,b){ return a.ts - b.ts; })[0];
-    if (!confirm('快照已满 ' + SNAP_MAX + ' 份，继续保存会自动删掉最旧的一份（' + oldest.name + '）。继续吗？')) return;
-  }
-  var d = new Date();
-  var pad = function(x){ return (x < 10 ? '0' : '') + x; };
-  var auto = pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' ' + snapProdLabel(ST.pid);
-  var nm = ($('#snapName').value || '').trim() || auto;
-  /* 备注条数按"有实际内容"统计（manualOf 会为所有患者惰性建空对象，直接数键会虚高） */
-  var filled = 0, mk = e.manual || {};
-  for (var mk2 in mk){ var mv = mk[mk2] || {}; if (mv.note || mv.diag || mv.pay || mv.cycle) filled++; }
-  var snap = {
-    id: String(d.getTime()) + Math.random().toString(36).slice(2, 6),
-    name: nm, ts: d.getTime(), pid: ST.pid,
-    n: e.pool.length, nm: filled,
-    pool: JSON.parse(JSON.stringify(e.pool)),
-    manual: JSON.parse(JSON.stringify(e.manual || {})),
-    fuv: JSON.parse(JSON.stringify(e.fuv || null))
-  };
-  list.unshift(snap);                                // 最新的排最前（同毫秒也稳定）
-  if (list.length > SNAP_MAX) list = list.slice(0, SNAP_MAX);
-  if (saveSnaps(list)){
-    $('#snapName').value = '';
-    renderSnapList();
-  }
-};
-function restoreSnap(id){
-  var s = loadSnaps().filter(function(x){ return String(x.id) === id; })[0];
-  if (!s) return;
-  if (!confirm('恢复快照「' + s.name + '」？\n\n品种「' + snapProdLabel(s.pid) + '」的数据池会整体替换为快照内容（当前 ' +
-      (PDS[s.pid] ? PDS[s.pid].pool.length : 0) + ' 位患者 → 快照 ' + s.n + ' 位，诊断/备注/随访一并恢复）。\n恢复前会自动留一个撤回点，可用「↩ 撤回」回到恢复前。')) return;
-  if (ST.pid !== s.pid && PDS[ST.pid] && PDS[ST.pid].loaded !== false) persistPid(ST.pid);   // 先保住当前品种再切换
-  pushUndo('恢复快照「' + s.name + '」');
-  if (!PDS[s.pid]) PDS[s.pid] = { pool: [], manual: {}, fuv: null, loaded: true };
-  PDS[s.pid].pool = JSON.parse(JSON.stringify(s.pool));
-  PDS[s.pid].manual = JSON.parse(JSON.stringify(s.manual || {}));
-  PDS[s.pid].fuv = JSON.parse(JSON.stringify(s.fuv || null));
-  PDS[s.pid].loaded = true;
-  persistPid(s.pid);                                 // 立即持久化（同品种/跨品种都要写回，2026-09-24 测试抓漏）
-  switchProduct(s.pid);                              // 重新挂接 ST.pool/manual 引用并重置筛选
-  ST.rowSelKeys = {}; updateDelSelBtn();
-  recompute(); fillSelects(); refreshHeader(); updatePoolInfo(); syncImpMode();
-  var has = !!ST.pool.length;
-  $('#drop').hidden = has; $('#app').hidden = !has;
-  render();
-  $('#snapOvl').hidden = true;
-  alert('已恢复快照「' + s.name + '」（' + snapProdLabel(s.pid) + ' · ' + s.n + ' 位患者）。');
+  var dataJson = JSON.stringify({ rows: rows }).replace(/<\//g, '<\\/');   // 防结束标签样文本提前闭合脚本
+  var today = sumYmd(E.todayStartMs(null));
+  var maskTag = (maskOn === false) ? ' · 未脱敏（仅限内部使用）' : ' · 已脱敏';
+  var ths = ['姓名','电话','存续状态','理论下次购药','最后购药','累计盒数','首次购药','末次医院','医生','药房','临床诊断','备注']
+    .map(function(t){ return '<th>' + t + '</th>'; }).join('');
+  /* 注意：script 开/闭标签必须拼接书写——字面的结束标签出现在模板字符串里会提前闭合外层脚本块 */
+  return '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">\n' +
+    '<title>' + esc(String(name)) + ' · ' + esc(snapProdLabel(pid)) + '</title>\n' +
+    '<style>\n' +
+    ':root{--ink:#3A3550;--ink2:#6B6480;--line:#EAE4F2;--bg:#FAF8FC}\n' +
+    '*{box-sizing:border-box}body{margin:0;font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink)}\n' +
+    '.wrap{max-width:1120px;margin:0 auto;padding:24px 16px 60px}\n' +
+    'h1{font-size:20px;margin:0 0 4px}.sub{color:var(--ink2);font-size:12.5px;margin-bottom:16px}\n' +
+    '.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}\n' +
+    'input,select{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}\n' +
+    '#q{width:250px}.cnt{color:var(--ink2);font-size:12.5px}\n' +
+    '.tbox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto;box-shadow:0 2px 10px rgba(124,107,175,.08);max-height:78vh}\n' +
+    'table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}\n' +
+    'th{position:sticky;top:0;background:#F3EFF9;text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid var(--line)}\n' +
+    'td{padding:7px 10px;border-bottom:1px solid #F4F1F8}tr:last-child td{border-bottom:none}\n' +
+    '.b{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px}\n' +
+    '.s0{background:#E5F3E8;color:#2F7D46}.s1{background:#FBF0DC;color:#9C6B1B}.s2{background:#FBE4E4;color:#B04A4A}\n' +
+    '.note{white-space:normal;min-width:150px;max-width:280px}\n' +
+    '.empty{padding:24px;text-align:center;color:var(--ink2)}\n' +
+    '</style>\n</head>\n<body><div class="wrap">\n' +
+    '<h1>' + esc(String(name)) + '</h1>\n' +
+    '<div class="sub">' + esc(snapProdLabel(pid)) + ' · ' + rows.length + ' 位患者 · ' + (pool || []).length + ' 条购药记录 · 存续状态按导出日 ' + today + ' 计算' + maskTag + ' · 由「销售患者工作台」导出</div>\n' +
+    '<div class="bar"><input id="q" placeholder="搜索姓名 / 电话 / 医院 / 医生 / 备注">' +
+    '<select id="fs"><option value="">全部状态</option><option>在治</option><option>断药预警</option><option>脱落</option></select>' +
+    '<span class="cnt" id="cnt"></span></div>\n' +
+    '<div class="tbox"><table><thead><tr>' + ths + '</tr></thead><tbody id="tb"></tbody></table></div>\n' +
+    '<scr' + 'ipt>\nvar DATA=' + dataJson + ';\n' +
+    'function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c];});}\n' +
+    'function render(){var q=(document.getElementById("q").value||"").trim().toLowerCase();\n' +
+    'var fs=document.getElementById("fs").value;\n' +
+    'var rows=DATA.rows.filter(function(r){if(fs&&r.st!==fs)return false;\n' +
+    'if(q){var hay=(r.nm+" "+r.ph+" "+r.ho+" "+r.dr+" "+r.nt).toLowerCase();if(hay.indexOf(q)<0)return false;}return true;});\n' +
+    'document.getElementById("cnt").textContent="显示 "+rows.length+" / "+DATA.rows.length+" 位患者";\n' +
+    'document.getElementById("tb").innerHTML=rows.length?rows.map(function(r){\n' +
+    'var cls=r.st==="在治"?"s0":(r.st==="断药预警"?"s1":"s2");\n' +
+    'return "<tr><td>"+esc(r.nm)+"</td><td>"+esc(r.ph)+"</td><td><span class=\\"b "+cls+"\\">"+esc(r.st)+"</span></td><td>"+esc(r.nx)+"</td><td>"+esc(r.lt)+"</td><td style=\\"text-align:right\\">"+r.qt+"</td><td>"+esc(r.ft)+"</td><td>"+esc(r.ho)+"</td><td>"+esc(r.dr)+"</td><td>"+esc(r.so)+"</td><td class=\\"note\\">"+esc(r.dg)+"</td><td class=\\"note\\">"+esc(r.nt)+"</td></tr>";\n' +
+    '}).join(""):"<tr><td colspan=\\"12\\" class=\\"empty\\">没有符合条件的患者</td></tr>";}\n' +
+    'document.getElementById("q").oninput=render;document.getElementById("fs").onchange=render;render();\n' +
+    '</scr' + 'ipt>\n</div>\n</body>\n</html>';
 }
 
 /* 切换品种事件 */
@@ -3160,7 +3134,6 @@ function clearRowSel(){
 }
 $('#btnClearSel').onclick = clearRowSel;
 document.addEventListener('keydown', function(ev){
-  if (ev.key === 'Escape' && !$('#snapOvl').hidden){ $('#snapOvl').hidden = true; return; }   // 快照弹窗：Esc 直接关闭
   if (ev.key === 'Escape' && !$('#sumOvl').hidden) return;   // 弹窗打开时 Esc 归弹窗管
   if (ev.key === 'Escape'){
     var calOpen = CALS.some(function(c){ return !c.panel.hidden; });
@@ -3728,7 +3701,8 @@ try { document.getElementById('tourBall').hidden = false; } catch(e){}
 /* 测试钩子：仅供自动化回归测试触达内部状态与函数，不影响正常使用（2026-09-20） */
 window.__wb = { ST: ST, PDS: PDS, BE: BE, applyImport: applyImport, persistPid: persistPid,
                 snapshotState: snapshotState, undoLast: undoLast, switchProduct: switchProduct,
-                routeDroppedFile: routeDroppedFile, sniffIsFollow: sniffIsFollow };
+                routeDroppedFile: routeDroppedFile, sniffIsFollow: sniffIsFollow,
+                buildSnapShareHtml: buildSnapShareHtml };
 })();
 </script>
 </body>
