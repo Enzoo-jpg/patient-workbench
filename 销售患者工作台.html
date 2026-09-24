@@ -451,6 +451,12 @@
         <input type="date" id="fNoteTo" hidden>
         <div id="calNote" class="calPanel" hidden></div>
       </label>
+      <label class="dr calAnchor" title="按末次随访（随访任务执行时间）筛选：点日历，第 1 次点击选开始、第 2 次点击选结束">末次随访
+        <button type="button" id="fFuBtn" class="sumBtn" title="点击打开日历：第 1 次点击选开始日期，第 2 次点击选结束日期；面板里可一键清除">📅 <span id="fFuTxt">全部</span></button>
+        <input type="date" id="fFuFrom" hidden>
+        <input type="date" id="fFuTo" hidden>
+        <div id="calFu" class="calPanel" hidden></div>
+      </label>
       <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
       <button id="btnDelSel" hidden style="color:var(--rose);border-color:var(--rose)" title="删除选中的患者及其全部购药记录（本品种）；删除前自动留快照，可用「撤回」恢复">删除选中患者</button>
       <button id="btnClearSel" hidden title="一键取消所有选中（也可按 Esc 键）">取消选择</button>
@@ -1062,7 +1068,7 @@ function switchProduct(pid){
   try { localStorage.setItem(PID_STORAGE_KEY, pid); } catch(e){}
   ST.result = null; ST.importMsg = '';
   /* 换品种后重置筛选，避免沿用上个品种 */
-  ['#q','#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNoteFrom','#fNoteTo','#dStore'].forEach(function(s){
+  ['#q','#fStatus','#fStore','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNoteFrom','#fNoteTo','#fFuFrom','#fFuTo','#dStore'].forEach(function(s){
     var el = $(s); if (el) el.value = '';
   });
   /* 后端懒加载：该品种还没从服务器取过 → 取到后重渲染（2026-09-18 结构性修复） */
@@ -1664,6 +1670,11 @@ function filtered(){
   var n1Ms = nF1 ? E.parseDateLike(nF1) : null;
   var n2Ms = nF2 ? E.parseDateLike(nF2) : null;
   if (n2Ms != null) n2Ms = n2Ms + 86400000 - 1;
+  /* 末次随访区间：比较随访任务的最后执行时间（fuVals.ms）；从未随访者不属于任何区间 */
+  var gF1 = $('#fFuFrom').value, gF2 = $('#fFuTo').value;
+  var g1Ms = gF1 ? E.parseDateLike(gF1) : null;
+  var g2Ms = gF2 ? E.parseDateLike(gF2) : null;
+  if (g2Ms != null) g2Ms = g2Ms + 86400000 - 1;
 
   var list = ST.result.patients.filter(function(p){
     if (fs && effStatus(p) !== fs) return false;
@@ -1692,6 +1703,14 @@ function filtered(){
         if (n1Ms != null && ndMs < n1Ms) return false;
         if (n2Ms != null && ndMs > n2Ms) return false;
       }
+    }
+    /* 按末次随访时间区间筛选：从未随访的患者被任何区间排除 */
+    if (g1Ms != null || g2Ms != null){
+      var fv = fuVals(p);
+      var fuMs = fv ? fv.ms : null;
+      if (!fuMs) return false;
+      if (g1Ms != null && fuMs < g1Ms) return false;
+      if (g2Ms != null && fuMs > g2Ms) return false;
     }
     return true;
   });
@@ -1766,7 +1785,7 @@ function render(){
   var nAll = viewAll.length;
 
   var fS = $('#fStatus').value, fF = $('#fFill').value;
-  var hasFilter = !!(fS || fF || $('#fNoteFrom').value || $('#fNoteTo').value || $('#fStore').value || $('#fHosp').value ||
+  var hasFilter = !!(fS || fF || $('#fNoteFrom').value || $('#fNoteTo').value || $('#fFuFrom').value || $('#fFuTo').value || $('#fStore').value || $('#fHosp').value ||
                      $('#fWinFrom').value || $('#fWinTo').value ||
                      $('#fFirstFrom').value || $('#fFirstTo').value || ($('#q').value || '').trim());
   var sourceDiag = curProduct() && curProduct().diagMode === 'source';
@@ -1955,6 +1974,7 @@ function renderSummary(){
 function drill(what){
   if (what === 'all'){
     $('#fStatus').value = ''; $('#fFill').value = ''; $('#fNoteFrom').value = ''; $('#fNoteTo').value = '';
+    $('#fFuFrom').value = ''; $('#fFuTo').value = '';
     $('#fStore').value = ''; $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = ''; $('#dStore').value = '';
     $('#fFirstFrom').value = ''; $('#fFirstTo').value = '';
     $('#q').value = '';
@@ -2635,6 +2655,7 @@ function applyLoaded(name, parsed){
   $('#q').value = ''; $('#fStatus').value = ''; $('#fStore').value = ''; $('#dStore').value = '';
   $('#fHosp').value = ''; $('#fWinFrom').value = ''; $('#fWinTo').value = '';
   $('#fFirstFrom').value = ''; $('#fFirstTo').value = ''; $('#fFill').value = ''; $('#fNoteFrom').value = ''; $('#fNoteTo').value = '';
+  $('#fFuFrom').value = ''; $('#fFuTo').value = '';
   syncAllSsel();   // 可搜索下拉按钮文字同步
   $('#drop').hidden = true;
   $('#app').hidden = false;
@@ -2954,7 +2975,7 @@ $('#fuFile').onchange = function(){
 $('#mask').onchange = renderTable;
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
-['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNoteFrom','#fNoteTo'].forEach(function(s){ $(s).onchange = renderTable; });
+['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNoteFrom','#fNoteTo','#fFuFrom','#fFuTo'].forEach(function(s){ $(s).onchange = renderTable; });
 /* 看板药房切换器是主控件：同时驱动 KPI 与明细表 */
 $('#dStore').onchange = function(){
   $('#fStore').value = this.value;     // 同步到明细表的 fStore（fStore 自身改动会反向同步回来）
@@ -3330,10 +3351,11 @@ function fRangeTxt(s, e){
   return (s || e) ? ((s || '…') + ' ~ ' + (e || '…')) : '全部';
 }
 function syncFilterCalBtns(){
-  var t1 = $('#fWinTxt'), t2 = $('#fFirstTxt'), t3 = $('#fNoteTxt');
+  var t1 = $('#fWinTxt'), t2 = $('#fFirstTxt'), t3 = $('#fNoteTxt'), t4 = $('#fFuTxt');
   if (t1) t1.textContent = fRangeTxt($('#fWinFrom').value, $('#fWinTo').value);
   if (t2) t2.textContent = fRangeTxt($('#fFirstFrom').value, $('#fFirstTo').value);
   if (t3) t3.textContent = fRangeTxt($('#fNoteFrom').value, $('#fNoteTo').value);
+  if (t4) t4.textContent = fRangeTxt($('#fFuFrom').value, $('#fFuTo').value);
 }
 /* 实例 1：整体小结周期（区间必填，快捷按钮负责重置，无清除入口） */
 mkRangeCal({
@@ -3371,6 +3393,15 @@ mkRangeCal({
   get: function(){ return [$('#fNoteFrom').value, $('#fNoteTo').value]; },
   apply: function(s, e){
     $('#fNoteFrom').value = s; $('#fNoteTo').value = e;
+    syncFilterCalBtns(); renderTable();
+  }
+});
+/* 实例 5：明细筛选 · 末次随访时间（比较随访任务最后执行时间 fuVals.ms；从未随访者不属于任何区间，2026-09-24） */
+mkRangeCal({
+  panel: $('#calFu'), btn: $('#fFuBtn'), clearable: true,
+  get: function(){ return [$('#fFuFrom').value, $('#fFuTo').value]; },
+  apply: function(s, e){
+    $('#fFuFrom').value = s; $('#fFuTo').value = e;
     syncFilterCalBtns(); renderTable();
   }
 });
