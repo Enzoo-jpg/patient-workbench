@@ -61,15 +61,6 @@
   .kpi-click{cursor:pointer;transition:.12s;user-select:none}
   .kpi-click:hover{border-color:var(--violet);box-shadow:0 2px 8px rgba(155,140,196,.18)}
   .kpi-active{border-color:var(--violet);box-shadow:0 0 0 2px var(--violet-l)}
-  /* 明细区状态卡（2026-09-28）：与分享页总结卡同交互，点卡片筛选明细、再点取消 */
-  .stCards{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-  .stCard{flex:1;min-width:118px;background:#FFF;border:1px solid var(--line);border-radius:10px;padding:6px 12px;cursor:pointer;user-select:none;transition:box-shadow .15s,border-color .15s}
-  .stCard:hover{box-shadow:0 2px 10px rgba(124,107,175,.18)}
-  .stCard b{font-size:16px;margin-right:6px}
-  .stCard span{font-size:12px;color:var(--ink2)}
-  .stCard.v b{color:var(--violet)}
-  .stCard.g b{color:#2F7D46}.stCard.a b{color:#9C6B1B}.stCard.r b{color:#B04A4A}
-  .stCard.on{border-color:#9A8CC8;background:#F5F1FB}
   .kpi-flash{animation:flash 1.3s ease}
   @keyframes flash{0%,100%{background:var(--card)}25%{background:var(--violet-l)}}
 
@@ -452,7 +443,6 @@
   </details>
 
   <div class="card">
-    <div class="stCards" id="stCards"></div>
     <div class="tbar">
       <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院（脱敏开启时可用打码搜索）">
       <select id="fStatus"><option value="">全部状态</option>
@@ -1845,27 +1835,6 @@ function render(){
     el.onclick = function(){ drill(el.getAttribute('data-drill')); };
   });
 
-  /* 明细区状态卡（2026-09-28）：数字与顶部指标卡同口径（随药房切换联动），
-     点卡片筛选明细表（复用 drill，再点一次取消；点「患者总数」卡=清全部筛选） */
-  var stBox = $('#stCards');
-  if (stBox){
-    var fScard = $('#fStatus').value;
-    var stCard = function(cls, num, lab, st){
-      return '<div class="stCard ' + cls + (fScard === st && st ? ' on' : '') + '" data-st="' + st +
-        '" title="' + (st ? '点击按此状态筛选明细，再点一次取消' : '点击清空全部筛选') + '"><b>' + num + '</b><span>' + lab + '</span></div>';
-    };
-    stBox.innerHTML = stCard('v', viewPats.length, '患者总数', '') +
-      stCard('g', c['在治'], '在治 ' + pct(c['在治'], viewN), '在治') +
-      stCard('a', c['断药预警'], '断药预警 ' + pct(c['断药预警'], viewN), '断药预警') +
-      stCard('r', c['脱落'], '脱落 ' + pct(c['脱落'], viewN), '脱落');
-    Array.prototype.forEach.call(stBox.querySelectorAll('.stCard[data-st]'), function(el){
-      el.onclick = function(){
-        var s = el.getAttribute('data-st');
-        drill(s === '' ? 'all' : s);
-      };
-    });
-  }
-
   /* 分布条 */
   $('#dist').innerHTML =
     seg('d-g','在治',c['在治'],viewN,'kpiActive') + seg('d-a','断药预警',c['断药预警'],viewN,'kpiWarn') + seg('d-r','脱落',c['脱落'],viewN,'kpiDrop');
@@ -2358,7 +2327,6 @@ function cellOf(k, p, m, pay, st, mask){
 
 function renderTable(){
   syncFilterCalBtns();                          // 日期筛选按钮文字跟随（撤回/换品种重置后同步）
-  syncStCards();                                // 明细区状态卡高亮跟随状态下拉（2026-09-28）
   var list = filtered();
   var mask = $('#mask').checked;
   var vcols = COLS.filter(function(c){ return VIS[c.k] !== false; });
@@ -3481,16 +3449,6 @@ function syncRangeBtn(){
 }
 function fRangeTxt(s, e){
   return (s || e) ? ((s || '…') + ' ~ ' + (e || '…')) : '全部';
-}
-/* 明细区状态卡高亮跟随状态下拉（2026-09-28）：
-   render() 每次重建卡片时已按 fStatus 初始高亮，这里处理不触发
-   render 的路径（如状态下拉 change 但计数未变时也会走 onchange → render，
-   故此函数主要兜底直接调用场景，保持高亮与 #fStatus 一致） */
-function syncStCards(){
-  var fS = $('#fStatus').value;
-  Array.prototype.forEach.call(document.querySelectorAll('#stCards .stCard[data-st]'), function(el){
-    el.classList.toggle('on', !!fS && el.getAttribute('data-st') === fS);
-  });
 }
 function syncFilterCalBtns(){  var t1 = $('#fWinTxt'), t2 = $('#fFirstTxt'), t3 = $('#fNoteTxt'), t4 = $('#fFuTxt');
   if (t1) t1.textContent = fRangeTxt($('#fWinFrom').value, $('#fWinTo').value);
