@@ -428,7 +428,8 @@
         <span style="width:42px;color:var(--ink2);font-size:13px;flex:none">药房</span>
         <select id="shareStore" style="flex:1;font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff"></select>
       </div>
-      <label class="sw" style="font-size:13px;margin:6px 0 2px"><input type="checkbox" id="shareMask" checked> 脱敏（姓名/电话打码、医生保留姓）</label>
+      <label class="sw" style="font-size:13px;margin:6px 0 2px"><input type="checkbox" id="shareMaskName" checked> 姓名/电话脱敏</label>
+      <label class="sw" style="font-size:13px;margin:2px 0 2px"><input type="checkbox" id="shareMaskDoc" checked> 医生脱敏（保留姓）</label>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button type="button" id="shareCancel" style="font-size:12.5px;padding:5px 14px">取消</button>
         <button type="button" id="shareGo" class="pri" style="font-size:12.5px;padding:5px 16px">导出</button>
@@ -3072,27 +3073,35 @@ function openShareDialog(){
     .map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(p.label) + '</option>'; }).join('');
   sel.value = ST.pid;                                // 默认当前品种（必有数据，必在列表中）
   shareFillStores();
-  $('#shareMask').checked = true;                    // 每次打开默认勾选脱敏
+  $('#shareMaskName').checked = true;                // 每次打开默认勾选脱敏
+  $('#shareMaskDoc').checked = true;
   $('#snapOvl').hidden = false;
 }
 $('#sharePid').onchange = shareFillStores;
 $('#shareCancel').onclick = function(){ $('#snapOvl').hidden = true; };
 $('#snapOvl').addEventListener('click', function(ev){ if (ev.target === this) this.hidden = true; });
 $('#shareGo').onclick = function(){
-  var pid = $('#sharePid').value, store = $('#shareStore').value, maskOn = $('#shareMask').checked;
+  var pid = $('#sharePid').value, store = $('#shareStore').value;
+  var maskOpt = { name: $('#shareMaskName').checked, doc: $('#shareMaskDoc').checked };
   var e = PDS[pid];
   if (!e || !e.pool.length){ alert('该品种没有数据，无法导出。'); return; }
   $('#snapOvl').hidden = true;
   var label = snapProdLabel(pid);
   var nm = label + ' · 患者分享' + (store ? '（' + store + '）' : '');
   var fname = ('患者分享_' + label + (store ? '_' + store : '') + '_' + stamp() + '.html').replace(/[\\/:*?"<>|]/g, '_');
-  download(fname, buildSnapShareHtml(e.pool, e.manual || {}, pid, nm, maskOn, store), 'text/html;charset=utf-8');
+  download(fname, buildSnapShareHtml(e.pool, e.manual || {}, pid, nm, maskOpt, store), 'text/html;charset=utf-8');
 };
 
 /* ---------- 分享 HTML 生成器：单文件只读（2026-09-24）----------
    与工作台同一引擎口径（E.compute + 人工周期覆盖 + nextActual 优先）在导出时聚合，
    存续状态按导出日冻结；接收方浏览器双击打开即看，支持搜索/状态筛选，无任何外部依赖。 */
-function buildSnapShareHtml(pool, manual, pid, name, maskOn, store){
+/* ---------- 分享 HTML 生成器：单文件只读（2026-09-24，2026-09-28 列同步+细分脱敏）----------
+   与工作台同一引擎口径（E.compute + 人工周期覆盖 + nextActual 优先）在导出时聚合，
+   存续状态按导出日冻结；列跟随看板「列设置」当前显隐；接收方浏览器双击打开即看，无外部依赖。 */
+function buildSnapShareHtml(pool, manual, pid, name, mask, store){
+  /* 脱敏细分：mask=true/缺省=全脱敏；false=全不脱敏；{name,doc}=分别控制（2026-09-28） */
+  var mkN = (mask === false) ? false : !(mask && mask.name === false);
+  var mkD = (mask === false) ? false : !(mask && mask.doc === false);
   var prod = productOf(pid);
   var res = E.compute(pool || [], {
     daysPerBox: prod ? prod.daysPerBox : 30,
@@ -3108,8 +3117,46 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn, store){
   if (store) plist = plist.filter(function(p){ return p.store === store; });
   var nRec = 0;
   plist.forEach(function(p){ nRec += p.nRows || 0; });
+  /* 随访数据（末次随访等 4 列）：取该品种已导入的随访聚合 */
+  var fuvData = PDS[pid] ? PDS[pid].fuv : null;
+  function fvOf(p){
+    var f = (fuvData && fuvData.byKey) ? fuvData.byKey[fuKey(p)] : null;
+    if (!f) return null;
+    return { last: fuDateStr(f.lastMs),
+             med: f.lastMed || (f.lastStop ? '停药' : ''),
+             reason: f.lastStop ? ('停药：' + f.lastStop) : (f.lastReduce || ''),
+             issue: f.lastIssue || '' };
+  }
+  /* 分享列 = 看板「列设置」当前可见列（与明细表同步显隐，2026-09-28）；
+     单元格格式与明细表一致：双行列合成「主（副）」，医生脱敏只影响 hospdoc 列 */
+  var COLGET = {
+    name:      function(p, m, fv){ var nm = p.name || (p.orderNo ? '订单:' + p.orderNo : '(空)'); return mkN ? maskName(nm) : nm; },
+    phone:     function(p){ return mkN ? maskPhone(p.phone) : (p.phone || ''); },
+    firstBuy:  function(p){ return E.fmtDate(p.firstBuyMs) + '（累计 ' + (p.totalQty || 0) + ' 盒）'; },
+    lastBuy:   function(p){ return E.fmtDate(p.lastBuyMs) + '（末次月 ' + (p.lastQty || 0) + ' 盒）'; },
+    nextBuy:   function(p){ return sumYmd(p.nextMs); },
+    nextActual:function(p, m){ return m.nextActual || ''; },
+    cycle:     function(p){ return p.cycleDays != null ? (p.cycleDays + ' 天') : ''; },
+    status:    function(p, m, fv, st){ return st; },
+    diag:      function(p, m){ return m.diag || p.diagSrc || p.indSrc || ''; },
+    hospdoc:   function(p){ return (p.hospital || '') + (p.doctor ? ' / ' + (mkD ? maskName(p.doctor) : p.doctor) : ''); },
+    dept:      function(p){ return p.dept || ''; },
+    store:     function(p){ return shortStore(p.store || ''); },
+    pay:       function(p, m){ return m.pay || p.pay || ''; },
+    note:      function(p, m){ return (m.note || '') + (m.noteDate ? '（' + m.noteDate + '）' : ''); },
+    fuLast:    function(p, m, fv){ return fv ? fv.last : ''; },
+    fuMed:     function(p, m, fv){ return fv ? fv.med : ''; },
+    fuReason:  function(p, m, fv){ return fv ? fv.reason : ''; },
+    fuIssue:   function(p, m, fv){ return fv ? fv.issue : ''; }
+  };
+  var SHORT = { note: '备注' };                        // 分享页表头用短标签
+  var shCols = COLS.filter(function(c){ return c.k === 'name' || VIS[c.k] !== false; });
+  var stIdx = -1;
+  shCols.forEach(function(c, i){ if (c.k === 'status') stIdx = i; });
+  var head = shCols.map(function(c){ return SHORT[c.k] || c.t; });
   var rows = plist.map(function(p){
     var m = manual[p.key] || {};
+    var fv = fvOf(p);
     var nxMs = p.nextMs;
     if (m.nextActual){                                   // 人工填写的实际下次购药优先（对齐 effNextMs）
       var o = E.parseDateLike(m.nextActual);
@@ -3117,24 +3164,14 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn, store){
     }
     var gap = E.todayStartMs(null) - nxMs;               // 状态按导出日冻结
     var st = gap <= 0 ? '在治' : (gap <= 30 * 86400000 ? '断药预警' : '脱落');
-    var nm = p.name || (p.orderNo ? '订单:' + p.orderNo : '(空)');
-    var mk = maskOn !== false;                           // 默认脱敏，仅显式传 false 才出原文
-    return {
-      nm: mk ? maskName(nm) : nm,
-      ph: mk ? maskPhone(p.phone) : (p.phone || ''),
-      st: st,
-      nx: sumYmd(nxMs), lt: sumYmd(p.lastBuyMs), ft: sumYmd(p.firstBuyMs),
-      qt: p.totalQty || 0,
-      ho: p.hospital || '',
-      dr: mk ? maskName(p.doctor) : (p.doctor || ''),
-      so: p.store || '',
-      dg: m.diag || p.diagSrc || p.indSrc || '',
-      nt: m.note || ''
-    };
+    return { st: st, c: shCols.map(function(c){ return String(COLGET[c.k](p, m, fv, st)); }) };
   });
-  var dataJson = JSON.stringify({ rows: rows }).replace(/<\//g, '<\\/');   // 防结束标签样文本提前闭合脚本
+  var dataJson = JSON.stringify({ head: head, stIdx: stIdx, rows: rows }).replace(/<\//g, '<\\/');   // 防结束标签样文本提前闭合脚本
   var today = sumYmd(E.todayStartMs(null));
-  var maskTag = (maskOn === false) ? ' · 未脱敏（仅限内部使用）' : ' · 已脱敏';
+  var mkParts = [];
+  if (mkN) mkParts.push('姓名/电话');
+  if (mkD) mkParts.push('医生');
+  var maskTag = mkParts.length ? (' · 已脱敏：' + mkParts.join('、')) : ' · 未脱敏（仅限内部使用）';
   /* 顶部状态总结卡（2026-09-24）：患者总数/在治/断药预警/脱落 + 占比，口径与工作台 KPI 一致 */
   var cSt = { '在治': 0, '断药预警': 0, '脱落': 0 };
   rows.forEach(function(r){ cSt[r.st] = (cSt[r.st] || 0) + 1; });
@@ -3151,8 +3188,7 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn, store){
     if (p.lastBuyMs != null && (maxMs == null || p.lastBuyMs > maxMs)) maxMs = p.lastBuyMs;
   });
   var spanTxt = (minMs != null && maxMs != null) ? (sumYmd(minMs) + ' ~ ' + sumYmd(maxMs)) : '—';
-  var ths = ['姓名','电话','存续状态','理论下次购药','最后购药','累计盒数','首次购药','末次医院','医生','药房','临床诊断','备注']
-    .map(function(t){ return '<th>' + t + '</th>'; }).join('');
+  var ths = head.map(function(t){ return '<th>' + esc(t) + '</th>'; }).join('');
   /* 注意：script 开/闭标签必须拼接书写——字面的结束标签出现在模板字符串里会提前闭合外层脚本块 */
   return '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">\n' +
@@ -3194,12 +3230,12 @@ function buildSnapShareHtml(pool, manual, pid, name, maskOn, store){
     'function render(){var q=(document.getElementById("q").value||"").trim().toLowerCase();\n' +
     'var fs=curSt;\n' +
     'var rows=DATA.rows.filter(function(r){if(fs&&r.st!==fs)return false;\n' +
-    'if(q){var hay=(r.nm+" "+r.ph+" "+r.ho+" "+r.dr+" "+r.nt).toLowerCase();if(hay.indexOf(q)<0)return false;}return true;});\n' +
+    'if(q){var hay=r.c.join(" ").toLowerCase();if(hay.indexOf(q)<0)return false;}return true;});\n' +
     'document.getElementById("cnt").textContent="显示 "+rows.length+" / "+DATA.rows.length+" 位患者";\n' +
     'document.getElementById("tb").innerHTML=rows.length?rows.map(function(r){\n' +
-    'var cls=r.st==="在治"?"s0":(r.st==="断药预警"?"s1":"s2");\n' +
-    'return "<tr><td>"+esc(r.nm)+"</td><td>"+esc(r.ph)+"</td><td><span class=\\"b "+cls+"\\">"+esc(r.st)+"</span></td><td>"+esc(r.nx)+"</td><td>"+esc(r.lt)+"</td><td style=\\"text-align:right\\">"+r.qt+"</td><td>"+esc(r.ft)+"</td><td>"+esc(r.ho)+"</td><td>"+esc(r.dr)+"</td><td>"+esc(r.so)+"</td><td class=\\"note\\">"+esc(r.dg)+"</td><td class=\\"note\\">"+esc(r.nt)+"</td></tr>";\n' +
-    '}).join(""):"<tr><td colspan=\\"12\\" class=\\"empty\\">没有符合条件的患者</td></tr>";}\n' +
+    'var tds=r.c.map(function(v,i){return i===DATA.stIdx?"<td><span class=\\"b "+(r.st==="在治"?"s0":(r.st==="断药预警"?"s1":"s2"))+"\\">"+esc(r.st)+"</span></td>":"<td>"+esc(v)+"</td>";}).join("");\n' +
+    'return "<tr>"+tds+"</tr>";\n' +
+    '}).join(""):"<tr><td colspan=\\""+DATA.head.length+"\\" class=\\"empty\\">没有符合条件的患者</td></tr>";}\n' +
     'function setSt(s){curSt=s;document.getElementById("fs").value=s;var cs=document.querySelectorAll(".kc[data-st]");for(var i=0;i<cs.length;i++){cs[i].classList.toggle("on",cs[i].getAttribute("data-st")===s);}render();}\n' +
     'var cs=document.querySelectorAll(".kc[data-st]");for(var i=0;i<cs.length;i++){(function(el){el.onclick=function(){var s=el.getAttribute("data-st");setSt(curSt===s?"":s);};})(cs[i]);}\n' +
     'document.getElementById("fs").onchange=function(){setSt(this.value);};document.getElementById("q").oninput=render;render();\n' +
