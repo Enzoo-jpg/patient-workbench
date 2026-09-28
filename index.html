@@ -1885,6 +1885,31 @@ function sumYmd(ms){
   var d = new Date(ms);
   return d.getFullYear() + '-' + (d.getMonth()+1 < 10 ? '0' : '') + (d.getMonth()+1) + '-' + (d.getDate() < 10 ? '0' : '') + d.getDate();
 }
+/* 购药事件化（2026-09-28 口径拍板：买了又退=抵销，抵消后再买=一次新购）：
+   1) 负数量（退货）抵销最近一笔未抵销的购入；
+   2) 同一天的多笔购入合并为一次事件（同日两笔不应互相当成「提前一个月」的基准）。
+   返回 [{ms, qty}]。修复：退货行被当作独立购药参与节奏链条，
+   导致「买了又退、退了又买」的患者算出「提前 30 天」这类荒谬值 */
+function netEvents(times, qtys){
+  var ev = [];
+  for (var i = 0; i < times.length; i++){
+    var q = (qtys && qtys[i] != null) ? qtys[i] : 0;
+    if (q > 0){
+      var top = ev[ev.length - 1];
+      if (top && Math.floor(top.ms / 86400000) === Math.floor(times[i] / 86400000)) top.qty += q;   // 同日合并
+      else ev.push({ ms: times[i], qty: q });
+    } else if (q < 0){
+      var need = -q;
+      while (need > 0 && ev.length){
+        var t2 = ev[ev.length - 1];
+        if (t2.qty > need){ t2.qty -= need; need = 0; }
+        else { need -= t2.qty; ev.pop(); }
+      }
+      /* 退货多于未抵销购入（数据异常）时，多余部分忽略 */
+    }
+  }
+  return ev;
+}
 function renderSummary(){
   var card = $('#sumCard'); if (!card) return;
   if (!ST.pool.length){ card.hidden = true; return; }
@@ -1907,24 +1932,26 @@ function renderSummary(){
   var pats = (ST.result.patients || []).filter(function(p){ return !ds || p.store === ds; });
   var detail = { due: [], bought: [], pen: [], next: [], cur: [], newP: [], old: [], onTime: [], dueNoBuy: [], buyNoDue: [] };   // 下钻明细
   pats.forEach(function(p){
-    var times = p.buyMs || [];
+    /* 购药事件化（2026-09-28）：小结全链路改用净额事件（退货抵销最近购入、同日合并），
+       退货行不再制造幻影应回购日/虚假已回购，购药节奏也不再被「买了又退、退了又买」带偏 */
+    var evs = netEvents(p.buyMs || [], p.buyQty);
+    if (!evs.length) return;                       // 购入全被退货抵销：不参与小结统计
     /* 用药周期按患者覆盖（2026-09-20）：engine 输出的 cycleDays 已含自定义值，未自定义=品种默认 */
     var D = (p.cycleDays > 0 ? p.cycleDays : sumDaysVal()) * 86400000;
-    var hit = false, hb = false, hitMs = null, hitIdx = -1;
-    var inP = false, firstInP = null, lastInP = null, lastIdx = -1, inQty = 0;   // 本期购药（周期内有任意一次实际购药）+ 周期内盒数
-    var qtys = p.buyQty || [];                     // 与 buyMs 一一对应的每次购药数量（2026-09-24）
-    for (var i = 0; i < times.length; i++){
-      var d2 = times[i] + D;                       // 该次购药的应回购日
+    var hit = false, hb = false, hitMs = null, jHit = -1;
+    var inP = false, firstInP = null, lastInP = null, jL = -1, inQty = 0;   // 本期购药（周期内有购药事件）+ 周期内盒数
+    for (var j = 0; j < evs.length; j++){
+      var d2 = evs[j].ms + D;                      // 该次购药事件的应回购日
       if (d2 >= ws && d2 < we){
         hit = true;
-        if (hitMs == null){ hitMs = d2; hitIdx = i; }
-        if (i < times.length - 1) hb = true;       // 之后还有更晚购药 → 已回购
+        if (hitMs == null){ hitMs = d2; jHit = j; }
+        if (j < evs.length - 1) hb = true;         // 之后还有更晚购药事件 → 已回购
       }
-      if (times[i] >= ws && times[i] < we){        // 实际购药落在周期内
+      if (evs[j].ms >= ws && evs[j].ms < we){      // 购药事件落在周期内
         inP = true;
-        if (firstInP == null) firstInP = times[i];
-        lastInP = times[i]; lastIdx = i;
-        inQty += (qtys[i] != null ? qtys[i] : 0);  // 销售盒数合计（退货负数自然冲减；勾「排除退货」后不含）
+        if (firstInP == null) firstInP = evs[j].ms;
+        lastInP = evs[j].ms; jL = j;
+        inQty += (evs[j].qty || 0);                // 销售盒数合计（退货已按净额抵销）
       }
     }
     if (hit){
@@ -1934,17 +1961,17 @@ function renderSummary(){
     if (inP){
       detail.cur.push({ p: p, refMs: lastInP, qty: inQty });
       /* 新患 = 首次购药就在本周期；老患 = 周期前已建档（首购早于周期起点） */
-      (times[0] >= ws ? detail.newP : detail.old).push({ p: p, refMs: firstInP, qty: inQty });
+      (evs[0].ms >= ws ? detail.newP : detail.old).push({ p: p, refMs: firstInP, qty: inQty });
       /* 按计划正常购药 = 老患 + 应回购日就在本周期 + 本期买了（2026-09-20 并入第 3 行闭环账目） */
-      if (times[0] < ws && hit) detail.onTime.push({ p: p, refMs: lastInP });
+      if (evs[0].ms < ws && hit) detail.onTime.push({ p: p, refMs: lastInP });
     }
     /* 差异指标（用户 2026-09-18 拍板）：定位提前/推迟购药人群，dev=实际购药-应回购（天，负=提前正=逾期） */
-    if (hit && hb && !inP){
-      detail.dueNoBuy.push({ p: p, refMs: hitMs, actMs: times[hitIdx + 1],
-        dev: Math.round((times[hitIdx + 1] - hitMs) / 86400000) });
+    if (hit && hb && !inP && evs[jHit + 1]){
+      detail.dueNoBuy.push({ p: p, refMs: hitMs, actMs: evs[jHit + 1].ms,
+        dev: Math.round((evs[jHit + 1].ms - hitMs) / 86400000) });
     }
-    if (inP && times[0] < ws && !hit){
-      var prevDue = times[lastIdx - 1] + D;        // 上一次购药对应的应回购日
+    if (inP && evs[0].ms < ws && !hit && jL > 0){
+      var prevDue = evs[jL - 1].ms + D;            // 上一次购药事件对应的应回购日
       detail.buyNoDue.push({ p: p, refMs: lastInP, dueMs: prevDue,
         dev: Math.round((lastInP - prevDue) / 86400000) });
     }
@@ -3875,7 +3902,8 @@ try { document.getElementById('tourBall').hidden = false; } catch(e){}
 window.__wb = { ST: ST, PDS: PDS, BE: BE, applyImport: applyImport, persistPid: persistPid,
                 snapshotState: snapshotState, undoLast: undoLast, switchProduct: switchProduct,
                 routeDroppedFile: routeDroppedFile, sniffIsFollow: sniffIsFollow,
-                buildSnapShareHtml: buildSnapShareHtml, openProdNew: openProdNew, DYN: DYN };
+                buildSnapShareHtml: buildSnapShareHtml, openProdNew: openProdNew, DYN: DYN,
+                netEvents: netEvents };
 })();
 </script>
 </body>
