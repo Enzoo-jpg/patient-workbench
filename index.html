@@ -3553,9 +3553,11 @@ function openSumDrill(kind, sk){
     ' · 名单遵循上方「姓名/电话脱敏」开关 · 点「保存修正」可人工改该' + (withQty ? '数值（盒）' : '人数') + '（显示值优先于自动统计）';
   var refHead = sumRefHead(kind);
   var withDev = kind === 'dueNoBuy' || kind === 'buyNoDue' || kind === 'bndEarly' || kind === 'bndLate';      // 差异指标：多一列「购药节奏」
+  var withFu = kind === 'pen';   // 未回购明细：补 4 列随访信息（与明细表随访列同口径，2026-09-28）
   var cols = [refHead,'姓名','电话','末次购药','药房','医院'];
   if (withDev) cols.push('购药节奏');
   if (withQty) cols.push('本期盒数');
+  if (withFu) cols.push('末次随访','用药状态','减停药原因','用药问题/反馈');
   var head = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
     '<thead><tr>' + cols.map(function(h){
       return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);position:static">' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
@@ -3572,13 +3574,21 @@ function openSumDrill(kind, sk){
     }
     var qtyCell = withQty
       ? '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6;text-align:right">' + (x.qty != null ? x.qty : 0) + '</td>' : '';
+    var fuCell = '';
+    if (withFu){
+      var f = fuVals(p);
+      fuCell = '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.last) : '') + '</td>' +
+        '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.med) : '') + '</td>' +
+        '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.reason) : '') + '</td>' +
+        '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.issue) : '') + '</td>';
+    }
     return '<tr>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(x.refMs) + '</td>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) + '</td>' +
       '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskPhone(p.phone) : p.phone) + '</td>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(p.lastBuyMs) + '</td>' +
       '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.store || '') + '</td>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.hospital || '') + '</td>' + devCell + qtyCell + '</tr>';
+      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.hospital || '') + '</td>' + fuCell + devCell + qtyCell + '</tr>';
   }).join('');
   $('#sumList').innerHTML = head + (body || '<tr><td colspan="' + cols.length + '" style="padding:10px;color:var(--ink2)">无（该指标当前为 0 人）</td></tr>') + '</tbody></table>';
   var sm = sumManual(ST.pid);
@@ -3642,9 +3652,11 @@ $('#sumExp').onclick = function(){
   var mask = $('#mask').checked;
   var withDev = ctx.kind === 'dueNoBuy' || ctx.kind === 'buyNoDue' || ctx.kind === 'bndEarly' || ctx.kind === 'bndLate';
   var withQty = ctx.kind === 'qtyCur' || ctx.kind === 'qtyNew' || ctx.kind === 'qtyOld';
+  var withFu = ctx.kind === 'pen';   // 未回购名单导出同步界面：补 4 列随访信息（2026-09-28）
   var head = [sumRefHead(ctx.kind), '患者姓名', '会员电话', '末次购药', '药房', '医院'];
   if (withDev) head.push('购药节奏');
   if (withQty) head.push('本期盒数');
+  if (withFu) head.push('末次随访', '用药状态', '减停药原因', '用药问题/反馈');
   var aoa = [head];
   det.slice().sort(function(a, b){ return a.refMs - b.refMs || (a.p.name < b.p.name ? -1 : 1); }).forEach(function(x){
     var p = x.p;
@@ -3656,6 +3668,10 @@ $('#sumExp').onclick = function(){
       p.store || '',
       p.hospital || ''
     ]);
+    if (withFu){
+      var f = fuVals(p);
+      aoa[aoa.length - 1].push(f ? f.last : '', f ? f.med : '', f ? f.reason : '', f ? f.issue : '');
+    }
     if (withDev) aoa[aoa.length - 1].push(devTxt(x.dev));
     if (withQty) aoa[aoa.length - 1].push(x.qty != null ? x.qty : 0);
   });
