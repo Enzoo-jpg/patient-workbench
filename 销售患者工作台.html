@@ -2527,7 +2527,7 @@ function exportExcel(){
   var mask = $('#mask').checked;                       // 跟随"姓名/电话脱敏"开关
   var sourceDiag = curProduct() && curProduct().diagMode === 'source';
   var diagHead = sourceDiag ? '适应症（底表）' : '临床诊断';
-  var head = ['患者姓名','年龄','电话','首次购药时间','累计购药数量','最后一次购药时间','最后一次购药数量','理论下次购药日期','用药周期(天)',diagHead,'末次购药医院','末次科室','处方医生','支付方式','存续状态','备注','备注日期','末次随访','用药状态','减停药原因','用药问题'];
+  var head = ['患者姓名','年龄','电话','首次购药时间','累计购药数量','最后一次购药时间','最后一次购药数量','理论下次购药日期','用药周期(天)',diagHead,'末次购药医院','末次科室','处方医生','药房名称','支付方式','存续状态','备注','备注日期','末次随访','用药状态','减停药原因','用药问题'];
   var aoa = [head];
   list.forEach(function(p){
     var m = manualOf(p.key);
@@ -2539,19 +2539,20 @@ function exportExcel(){
       mask ? maskPhone(p.phone) : p.phone,
       E.fmtDate(p.firstBuyMs), p.totalQty, E.fmtDate(p.lastBuyMs), p.lastQty,
       p.nextMs ? excelSerial(p.nextMs) : '', (p.cycleDays || '') + (p.cycleCustom ? '（自定义）' : ''), diagVal, p.hospital, p.dept || '', (p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : ''),
+      p.store || '',
       m.pay || p.pay, effStatus(p), m.note, m.noteDate,
       fv && fv.ms ? excelSerial(fv.ms) : '', fv ? fv.med : '', fv ? fv.reason : '', fv ? fv.issue : ''
     ]);
   });
   var ws = XLSX.utils.aoa_to_sheet(aoa);
-  /* 日期列数值化（Excel 可直接筛选/排序）：第 8 列理论下次购药日期、第 18 列末次随访 */
-  [7, 17].forEach(function(ci){
+  /* 日期列数值化（Excel 可直接筛选/排序）：第 8 列理论下次购药日期、第 19 列末次随访 */
+  [7, 18].forEach(function(ci){
     for (var R = 1; R < aoa.length; R++){
       var dc = ws[XLSX.utils.encode_cell({ r: R, c: ci })];
       if (dc && dc.t === 'n' && dc.v !== '') dc.z = 'yyyy-mm-dd';
     }
   });
-  ws['!cols'] = [12,6,15,12,13,13,14,14,12,11,22,10,10,22,10,30,11,14,10,18,20].map(function(w){ return {wch:w}; });
+  ws['!cols'] = [12,6,15,12,13,13,14,14,12,11,22,10,10,14,22,10,30,11,14,10,18,20].map(function(w){ return {wch:w}; });
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '随访表');
   XLSX.writeFile(wb, (curProduct() ? curProduct().label.split('（')[0] : '患者') + '工作台_' + stamp() + '.xlsx');
