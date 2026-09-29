@@ -1450,7 +1450,7 @@ var COLS = [
   {k:'firstBuy',  t:'首次 · 累计'},
   {k:'lastBuy',   t:'末次 · 数量'},
   {k:'nextBuy',   t:'理论下次'},
-  {k:'nextActual',t:'实际下次购药', e:'nextActual'},
+  {k:'nextActual',t:'预计下次购药日期', e:'nextActual'},
   {k:'cycle',     t:'用药周期(天)', e:'cycle'},
   {k:'status',    t:'存续状态'},
   {k:'diag',      t:'临床诊断',   e:'diag'},
@@ -1663,7 +1663,7 @@ function hasDiagField(p, m){
   return !!m.diag;
 }
 
-/* 实际下次购药时间（人工填写）优先判定存续状态；没填回退理论下次（用户 2026-09-10） */
+/* 预计下次购药日期（人工填写，原「实际下次购药」）优先判定存续状态；没填回退理论下次（用户 2026-09-10） */
 function effNextMs(p){
   var m = manualOf(p.key);
   if (m && m.nextActual){
@@ -1867,7 +1867,7 @@ function kpi(cls, lb, vl, ex, drill, active, tip){
    · 应回购 = 历史购药序列中存在某次购药 t_i + 周期天数 落在所选周期内
    · 已回购 = 该到期事件发生时患者之后还有更晚的购药记录（i 非末次）；未回购 = 到期时已是末次
    · 周期天数 = 小结卡片手工输入（默认品种档案每盒天数，仅影响小结统计）
-   · 下一周期预计复购 = 实际下次购药（人工填）优先回退理论，落在下一周期内（预测未来用最新状态）
+   · 下一周期预计复购 = 预计下次购药日期（人工填）优先回退理论，落在下一周期内（预测未来用最新状态）
    · 原因细分 v1 暂不接随访数据；橙色数字点击人工修正，按「品种+指标+周期」存本机 */
 function sumWeekStart(off){
   var d = new Date(); d.setHours(0,0,0,0);
@@ -2404,7 +2404,7 @@ function renderTable(){
       var m = manualOf(key);
       if ((m[f] || '') === inp.value) return;            // 值没变，不记撤回不落库
       /* 字段编辑也纳入撤回（用户 2026-09-10）：快照改前状态 */
-      var fl = {diag:'临床诊断', pay:'支付方式', note:'备注', noteDate:'备注日期', nextActual:'实际下次购药', cycle:'用药周期'}[f] || f;
+      var fl = {diag:'临床诊断', pay:'支付方式', note:'备注', noteDate:'备注日期', nextActual:'预计下次购药日期', cycle:'用药周期'}[f] || f;
       var pname = '';
       if (ST.result) ST.result.patients.forEach(function(pp){
         if (pp.key === key && !pname) pname = maskName(pp.name);
@@ -2427,13 +2427,13 @@ function renderTable(){
           '<span class=\'t\'>备注全文（' + (m.noteDate || '无日期') + '）</span>' + inp.value);
         else inp.removeAttribute('data-tipfull');
       }
-      if (f === 'diag' || f === 'nextActual') { render(); }   // 诊断影响"待填"计数；实际下次购药影响存续状态
+      if (f === 'diag' || f === 'nextActual') { render(); }   // 诊断影响"待填"计数；预计下次购药日期影响存续状态
     };
   });
 
   var tot = ST.result.patients.length;
   $('#cnt').textContent = list.length + ' / ' + tot + ' 人';
-  $('#foot').textContent = '口径：患者键 = 开票抬头 + 电话；末次数量 = 末次购药所在自然月合计；理论下次购药 = 末次购药 + 末次数量 × 用药周期（默认每盒天数，「用药周期」列可按患者自定义）；存续状态：预计购药日期当天及之前＝在治，过期 ≤30 天＝断药预警，过期 >30 天＝脱落；「实际下次购药」为人工填写，填写后存续状态按它判定，未填按理论下次';
+  $('#foot').textContent = '口径：患者键 = 开票抬头 + 电话；末次数量 = 末次购药所在自然月合计；理论下次购药 = 末次购药 + 末次数量 × 用药周期（默认每盒天数，「用药周期」列可按患者自定义）；存续状态：预计购药日期当天及之前＝在治，过期 ≤30 天＝断药预警，过期 >30 天＝脱落；「预计下次购药日期」为人工填写，填写后存续状态按它判定，未填按理论下次';
 }
 
 /* 今日日期（本地） */
@@ -3192,7 +3192,7 @@ function buildSnapShareHtml(pool, manual, pid, name, mask, store){
     var m = manual[p.key] || {};
     var fv = fvOf(p);
     var nxMs = p.nextMs;
-    if (m.nextActual){                                   // 人工填写的实际下次购药优先（对齐 effNextMs）
+    if (m.nextActual){                                   // 人工填写的预计下次购药日期优先（对齐 effNextMs）
       var o = E.parseDateLike(m.nextActual);
       if (o != null) nxMs = o;
     }
@@ -3843,7 +3843,7 @@ var TOUR = [
   { t: '脱敏开关', d: '给别人看屏幕、发截图之前先打开它：姓名电话全部打码，导出 Excel 也会同步打码。', sel: function(){ var m = document.querySelector('#mask'); return m ? (m.closest('label') || m) : null; } },
   { t: '筛选区', d: '状态、药房、医院、购药日期等条件可以叠加使用。比如「某药房 + 断药预警」= 这家店里快断药、要联系回购的人。', sel: '#fStatus' },
   { t: '统计卡', d: '在治 / 断药预警 / 脱落人数一眼看清。点卡片可以直接筛出对应的那批患者。', sel: '#kpis' },
-  { t: '患者明细表', d: '一行一位患者。部分格子可以直接点击填写：临床诊断、备注、实际下次购药、用药周期——填完自动保存，填错了点「撤回」。', sel: '#tb' },
+  { t: '患者明细表', d: '一行一位患者。部分格子可以直接点击填写：临床诊断、备注、预计下次购药日期、用药周期——填完自动保存，填错了点「撤回」。', sel: '#tb' },
   { t: '列设置', d: '表格太宽？点「列设置 ▾」自由勾选想看的列：用不到的随访列、支付方式等都可以关掉，选择会自动记住，下次打开还是你的配置。', sel: function(){ var el = document.querySelector('#colSetD'); return el || null; } },
   { t: '整体小结', d: '下面的橙色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；点「周期」的日历按钮，第 1 次点击选开始、第 2 次点击选结束日期，也能用上周/本周/下周快捷切换。导入数据后这里才有统计。', sel: '#sumCard' },
   { t: '导出 Excel', d: '最后一步：点「导出 Excel」，把当前患者的用药信息（购药时间/数量、理论下次购药、存续状态、诊断、备注等）导成表格留档或发给药师。姓名/电话跟随脱敏开关，发出去之前记得先开脱敏。', sel: function(){ var el = document.querySelector('#btnCsv'); return el || null; } },
