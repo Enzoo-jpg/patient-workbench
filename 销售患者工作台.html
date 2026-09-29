@@ -103,6 +103,11 @@
   th.na{cursor:default} th.na:hover{background:#F2EFF8}
   th .ar{color:var(--violet);font-size:10px;margin-left:2px}
   td{padding:3px 8px;border-bottom:1px solid #F1EEF6;vertical-align:middle}
+  /* 冻结姓名列（2026-09-29）：横向滚动时姓名跟随，方便对应填写信息 */
+  th.nm{left:0;z-index:3;border-right:1px solid var(--line)}
+  td.nm{position:sticky;left:0;background:var(--card);z-index:1;border-right:1px solid var(--line)}
+  tbody tr:hover td.nm{background:var(--violet-l)}
+  tbody tr.row-sel td.nm{background:#E4DCF5;box-shadow:inset 3px 0 0 var(--violet)}
   /* 列设置下拉 */
   .colset{position:relative}
   .colset summary{list-style:none;cursor:pointer;user-select:none}
@@ -2329,7 +2334,7 @@ function importFollow(file){
 function cellOf(k, p, m, pay, st, mask){
   switch(k){
     case 'name':       return td2(p.name ? (mask ? maskName(p.name) : p.name) : (p.orderNo ? '订单 ' + p.orderNo : ''),
-                                  p.ageBest == null ? '' : p.ageBest + ' 岁');
+                              p.ageBest == null ? '' : p.ageBest + ' 岁', 'nm');
     case 'phone':      return '<td><span class="mono">' + esc(p.phone ? (mask ? maskPhone(p.phone) : p.phone) : '') + '</span></td>';
     case 'firstBuy':   return td2(E.fmtDate(p.firstBuyMs), '累计 ' + p.totalQty + ' 盒');
     case 'lastBuy':    return td2(E.fmtDate(p.lastBuyMs), '末次月 ' + p.lastQty + ' 盒');
@@ -2362,7 +2367,7 @@ function renderTable(){
   $('#thr').innerHTML = vcols.map(function(c){
     var ar = (ST.sortK === c.k) ? '<span class="ar">'+(ST.sortDir>0?'▲':'▼')+'</span>' : '';
     var tip = {firstBuy:'colFirst', lastBuy:'colLast', nextBuy:'colNext'}[c.k];
-    return '<th data-k="'+c.k+'"'+(tip?' data-tip="'+tip+'"':'')+' class="'+(c.n?'na':'')+'" style="'+(c.n?'text-align:right':'')+'">'+c.t+ar+'</th>';
+    return '<th data-k="'+c.k+'"'+(tip?' data-tip="'+tip+'"':'')+' class="'+(c.k==='name'?'nm ':'')+(c.n?'na':'')+'" style="'+(c.n?'text-align:right':'')+'">'+c.t+ar+'</th>';
   }).join('');
   Array.prototype.forEach.call(document.querySelectorAll('#thr th'), function(th){
     th.onclick = function(){
@@ -2440,9 +2445,9 @@ function shiftDate(n){
   var p = function(x){ return (x < 10 ? '0' : '') + x; };
   return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
 }
-/* 两行式单元格 */
-function td2(main, sub){
-  return '<td>' + esc(main) +
+/* 两行式单元格（cls=附加类，姓名列传 'nm' 用于冻结） */
+function td2(main, sub, cls){
+  return '<td'+(cls?' class="'+cls+'"':'')+'>' + esc(main) +
     (sub ? '<span class="ref">' + esc(sub) + '</span>' : '') + '</td>';
 }
 function tdNext(p){
