@@ -2301,14 +2301,14 @@ function importFollow(file){
           o.lastMs = ms;
           o.lastType = fmap.type ? String(r[fmap.type] || '') : '';
           o.lastMed  = fmap.med  ? String(r[fmap.med]  || '') : '';
-        }
-        /* 减药/停药/反馈：在各自非空的行里取「执行时间最新」的一条
-           （随访文件行序不保证按时间排，不能按文件行序取最后一条） */
-        if (fmap.reduce){ var v1 = String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''); if (v1 && ms >= o.reduceMs){ o.reduceMs = ms; o.lastReduce = v1; } }
-        if (fmap.stop)  { var v2 = String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''); if (v2 && ms >= o.stopMs){ o.stopMs = ms; o.lastStop = v2; } }
-        if (issueCols.length){
-          var v3 = issueCols.map(function(h){ return fuCleanIssue(r[h]); }).filter(Boolean).join('；');
-          if (v3 && ms >= o.issueMs){ o.issueMs = ms; o.lastIssue = v3; }
+          /* 用药问题/反馈跟随末次任务（2026-09-30 口径拍板）：末次没填实质反馈就为空，
+             不再保留更早任务的旧反馈（旧行为会被误读成末次任务的反馈） */
+          if (issueCols.length){
+            o.lastIssue = issueCols.map(function(h){ return fuCleanIssue(r[h]); }).filter(Boolean).join('；');
+          }
+          /* 减药/停药原因同样跟随末次任务（2026-09-30 用户拍板）：末次没填实质原因就为空 */
+          if (fmap.reduce) o.lastReduce = fuCleanIssue(String(r[fmap.reduce] || '').trim().replace(/^【[^】]*】/, ''));
+          if (fmap.stop)   o.lastStop   = fuCleanIssue(String(r[fmap.stop]   || '').trim().replace(/^【[^】]*】/, ''));
         }
       });
       var poolArr = PDS[pid] ? PDS[pid].pool : [];
