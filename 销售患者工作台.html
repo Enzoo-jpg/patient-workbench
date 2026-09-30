@@ -128,12 +128,12 @@
   .sumCycle{display:inline-flex;gap:4px}
   .sumBtn{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);
     background:var(--card);color:var(--ink2);cursor:pointer}
-  .sumBtn.on{background:#FCA311;border-color:#FCA311;color:#fff}
+  .sumBtn.on{background:#6a7efc;border-color:#6a7efc;color:#fff}
   .sumRange{font-size:12.5px;color:var(--ink2)}
   .sumDaysLab{font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:4px}
-  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:#FCA311;font-weight:700;
+  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:#6a7efc;font-weight:700;
     border:1px solid var(--line);border-radius:6px;padding:2px 4px;text-align:center;background:#fff}
-  .sumDaysLab input:focus{outline:none;border-color:#FCA311}
+  .sumDaysLab input:focus{outline:none;border-color:#6a7efc}
   /* 区间日历（2026-09-20 首版，2026-09-23 抽成通用组件）：一个日历面板选起止日期 */
   .calAnchor{position:relative}
   .calPanel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--card);
@@ -141,29 +141,29 @@
     padding:10px;width:252px;user-select:none}
   .calHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
   .calHead b{font-size:13px;color:var(--ink)}
-  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:#FCA311;
+  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:#6a7efc;
     padding:2px 9px;border-radius:8px;line-height:1.2}
-  .calNav:hover{background:#FFF3D9}
+  .calNav:hover{background:#EDF0FE}
   .calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
   .calWd{font-size:11px;color:var(--ink2);padding:2px 0}
   .calD{font-size:12px;padding:4px 0;border-radius:8px;cursor:pointer;color:var(--ink)}
-  .calD:hover{background:#FFF3D9}
-  .calD.inR{background:#FFF3D9}
-  .calD.ep{background:#FCA311;color:#fff;font-weight:700}
+  .calD:hover{background:#EDF0FE}
+  .calD.inR{background:#EDF0FE}
+  .calD.ep{background:#6a7efc;color:#fff;font-weight:700}
   .calHint{font-size:11px;color:var(--ink3);margin-top:6px;text-align:center}
   .calFoot{display:flex;justify-content:flex-end;margin-top:2px}
   .calClear{border:none;background:none;cursor:pointer;font-size:11.5px;color:var(--rose);
     padding:2px 8px;border-radius:8px}
   .calClear:hover{background:var(--rose-l)}
-  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid #FCA311;
-    background:#FFF3D9;color:#FCA311;cursor:pointer}
-  .sumCopy:hover{background:#FCA311;color:#fff}
+  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid #6a7efc;
+    background:#EDF0FE;color:#6a7efc;cursor:pointer}
+  .sumCopy:hover{background:#6a7efc;color:#fff}
   .sumBody{background:#F7F9FC;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
     font-size:13px;color:var(--ink);line-height:2}
-  .sumBody .sn{font-weight:700;color:#FCA311;margin-right:6px}
-  .snum{color:#FCA311;font-weight:700;cursor:pointer;border-bottom:1px dashed #FCA311;padding:0 2px}
-  .snum:hover{background:#FFF3D9}
-  .snum input{width:64px;font:inherit;font-weight:700;color:#FCA311;border:1px solid #FCA311;
+  .sumBody .sn{font-weight:700;color:#6a7efc;margin-right:6px}
+  .snum{color:#6a7efc;font-weight:700;cursor:pointer;border-bottom:1px dashed #6a7efc;padding:0 2px}
+  .snum:hover{background:#EDF0FE}
+  .snum input{width:64px;font:inherit;font-weight:700;color:#6a7efc;border:1px solid #6a7efc;
     border-radius:5px;padding:0 4px;text-align:center}
   .snum input:focus{outline:none;background:#fff}
   .sumTip{font-size:12px;color:var(--ink3);margin-top:6px}
@@ -397,7 +397,7 @@
       <button type="button" id="btnCopySum" class="sumCopy" title="复制小结文字，可直接粘贴到微信/群">复制小结</button>
     </div>
     <div class="sumBody" id="sumBody"></div>
-    <div class="sumTip">💡 橙色数字可直接点击修改（人工修正优先于自动统计，自动保存）</div>
+    <div class="sumTip">💡 蓝色数字可直接点击修改（人工修正优先于自动统计，自动保存）</div>
   </div>
 
   <div class="dist" id="dist"></div>
@@ -3848,7 +3848,7 @@ var TOUR = [
   { t: '统计卡', d: '在治 / 断药预警 / 脱落人数一眼看清。点卡片可以直接筛出对应的那批患者。', sel: '#kpis' },
   { t: '患者明细表', d: '一行一位患者。部分格子可以直接点击填写：临床诊断、备注、预计下次购药日期、用药周期——填完自动保存，填错了点「撤回」。', sel: '#tb' },
   { t: '列设置', d: '表格太宽？点「列设置 ▾」自由勾选想看的列：用不到的随访列、支付方式等都可以关掉，选择会自动记住，下次打开还是你的配置。', sel: function(){ var el = document.querySelector('#colSetD'); return el || null; } },
-  { t: '整体小结', d: '下面的橙色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；点「周期」的日历按钮，第 1 次点击选开始、第 2 次点击选结束日期，也能用上周/本周/下周快捷切换。导入数据后这里才有统计。', sel: '#sumCard' },
+  { t: '整体小结', d: '下面的蓝色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；点「周期」的日历按钮，第 1 次点击选开始、第 2 次点击选结束日期，也能用上周/本周/下周快捷切换。导入数据后这里才有统计。', sel: '#sumCard' },
   { t: '导出 Excel', d: '最后一步：点「导出 Excel」，把当前患者的用药信息（购药时间/数量、理论下次购药、存续状态、诊断、备注等）导成表格留档或发给药师。姓名/电话跟随脱敏开关，发出去之前记得先开脱敏。', sel: function(){ var el = document.querySelector('#btnCsv'); return el || null; } },
   { t: '完成！', d: '点「导入新数据」选择药房系统的销售 Excel，就能开始用了。更详细的图文教程，见配套的「工作台使用教程.html」。', sel: null }
 ];
