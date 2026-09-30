@@ -108,6 +108,9 @@
   td.nm{position:sticky;left:0;background:var(--card);z-index:1;border-right:1px solid var(--line)}
   tbody tr:hover td.nm{background:var(--violet-l)}
   tbody tr.row-sel td.nm{background:#E3E9FE;box-shadow:inset 3px 0 0 var(--violet)}
+  /* 患者购药档案（2026-09-30）：点击姓名查看底表全部购药记录 */
+  .plink{color:var(--violet);cursor:pointer;font-weight:600}
+  .plink:hover{text-decoration:underline}
   /* 列设置下拉 */
   .colset{position:relative}
   .colset summary{list-style:none;cursor:pointer;user-select:none}
@@ -416,6 +419,18 @@
         <span class="grow"></span>
         <button type="button" id="sumExp" title="导出当前指标的患者名单为 Excel（姓名/电话跟随脱敏开关）">导出名单</button>
         <button type="button" id="sumClose" style="font-size:12px;padding:4px 12px">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 患者购药档案：点击明细表姓名查看该患者底表全部购药行为（2026-09-30） -->
+  <div class="ovl" id="patOvl" hidden>
+    <div class="mcard" style="max-width:920px">
+      <h3 id="patTitle">购药档案</h3>
+      <div class="msub" id="patSub"></div>
+      <div id="patList" style="max-height:56vh;overflow:auto"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+        <button type="button" id="patClose" style="font-size:12px;padding:4px 12px">关闭</button>
       </div>
     </div>
   </div>
@@ -776,6 +791,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
         lastBuyMs: last,
         buyMs: items.map(function (x) { return x.ms; }),   // 全部购药时间升序（小结按历史序列判回购，2026-09-18）
         buyQty: items.map(function (x) { return x.qty; }), // 与 buyMs 一一对应的每次购药数量（小结销售盒数用，2026-09-24）
+        records: items,                    // 全部购药原始记录（含药房/医院/医生/支付/适应症，2026-09-30 患者购药档案用）
         nextMs: nextMs,
         cycleDays: cyc,                    // 该患者实际生效的用药周期（自定义或品种默认）
         cycleCustom: cyc !== daysPerBox,   // 是否使用了个性化覆盖（界面提示用）
@@ -2338,8 +2354,12 @@ function importFollow(file){
 /* 单元格渲染分派：按列 key 产出 td（列显隐改造 2026-09-10） */
 function cellOf(k, p, m, pay, st, mask){
   switch(k){
-    case 'name':       return td2(p.name ? (mask ? maskName(p.name) : p.name) : (p.orderNo ? '订单 ' + p.orderNo : ''),
-                              p.ageBest == null ? '' : p.ageBest + ' 岁', 'nm');
+    case 'name': {
+      /* 2026-09-30：姓名可点击 → 患者购药档案（底表全部购药记录） */
+      var nmTxt = p.name ? (mask ? maskName(p.name) : p.name) : (p.orderNo ? '订单 ' + p.orderNo : '(未命名)');
+      return '<td class="nm"><span class="plink" data-pk="' + esc(p.key) + '" title="点击查看该患者的全部购药记录">' + esc(nmTxt) + '</span>' +
+        (p.ageBest == null ? '' : '<span class="ref">' + esc(p.ageBest + ' 岁') + '</span>') + '</td>';
+    }
     case 'phone':      return '<td><span class="mono">' + esc(p.phone ? (mask ? maskPhone(p.phone) : p.phone) : '') + '</span></td>';
     case 'firstBuy':   return td2(E.fmtDate(p.firstBuyMs), '累计 ' + p.totalQty + ' 盒');
     case 'lastBuy':    return td2(E.fmtDate(p.lastBuyMs), '末次月 ' + p.lastQty + ' 盒');
@@ -3286,6 +3306,8 @@ $('#prodSel').onchange = onSwitchProduct;
 /* 明细表点击选中行：Pastel 紫高亮，多选切换（2026-09-22 升级为多选，配合「删除选中患者」）。
    点击行内编辑控件（input/select）只做「确保选中」，不触发取消 */
 $('#tb').addEventListener('click', function(ev){
+  var plink = ev.target.closest ? ev.target.closest('.plink') : null;
+  if (plink){ openPatModal(plink.getAttribute('data-pk')); return; }   // 点姓名 = 购药档案，不触发行选中
   var tr = ev.target.closest ? ev.target.closest('tr') : null;
   if (!tr || !tr.parentNode || tr.parentNode.id !== 'tb') return;
   if (tr.querySelector('td.empty')) return;
@@ -3320,6 +3342,7 @@ function clearRowSel(){
 $('#btnClearSel').onclick = clearRowSel;
 document.addEventListener('keydown', function(ev){
   if (ev.key === 'Escape' && !$('#snapOvl').hidden){ $('#snapOvl').hidden = true; return; }   // 分享弹窗：Esc 直接关闭
+  if (ev.key === 'Escape' && !$('#patOvl').hidden){ $('#patOvl').hidden = true; ST.patOpenKey = null; return; }   // 购药档案弹窗：Esc 直接关闭
   if (ev.key === 'Escape' && !$('#sumOvl').hidden) return;   // 弹窗打开时 Esc 归弹窗管
   if (ev.key === 'Escape'){
     var calOpen = CALS.some(function(c){ return !c.panel.hidden; });
@@ -3721,7 +3744,64 @@ $('#sumExp').onclick = function(){
 /* 弹窗开着时切换脱敏开关 → 明细即时重渲染 */
 $('#mask').addEventListener('change', function(){
   if (!$('#sumOvl').hidden && ST.sumDrillCtx) openSumDrill(ST.sumDrillCtx.kind, ST.sumDrillCtx.sk);
+  if (!$('#patOvl').hidden && ST.patOpenKey) openPatModal(ST.patOpenKey);
 });
+
+/* ---------- 患者购药档案（2026-09-30）：点击明细表姓名 → 底表全部购药记录 ----------
+   数据源 = engine 归组的原始行（p.records，升序）；每行展示 日期/盒数/距上次/按期判断/药房/医院/医生/支付方式/适应症
+   按期判断口径与小结 v3 一致：上一笔净购的 盒数×每盒天数 为覆盖期（人工自定义周期患者用人工值）；
+   退货行（负数）红字标注；姓名/电话/医生跟随「姓名/电话脱敏」开关 */
+function openPatModal(pk){
+  var p = (ST.result.patients || []).filter(function(x){ return x.key === pk; })[0];
+  if (!p) return;
+  ST.patOpenKey = pk;
+  var mask = $('#mask').checked;
+  var nm = p.name ? (mask ? maskName(p.name) : p.name) : (p.orderNo ? '订单 ' + p.orderNo : '(未命名)');
+  $('#patTitle').textContent = nm + ' · 购药档案';
+  $('#patSub').textContent = '电话 ' + (mask ? maskPhone(p.phone) : (p.phone || '')) +
+    '　·　累计 ' + p.totalQty + ' 盒　·　首购 ' + E.fmtDate(p.firstBuyMs) +
+    '　·　末次 ' + E.fmtDate(p.lastBuyMs) + '（' + p.lastQty + ' 盒）' +
+    '　·　预计下次 ' + E.fmtDate(effNextMs(p)) +
+    '　·　' + effStatus(p);
+  var recs = p.records || [];
+  var head = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<thead><tr>' + ['购药日期','盒数','距上次','按期判断','药房','医院','医生','支付方式','适应症/诊断'].map(function(h){
+      return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line);position:static">' + h + '</th>';
+    }).join('') + '</tr></thead><tbody>';
+  var lastPos = null;   // 上一笔净购（正数）：按期判断的基准（紧邻行可能是退货，2026-09-30 测试抓出后修正）
+  var body = recs.map(function(r, i){
+    var gap = '—', dev = '—';
+    if (r.qty > 0 && lastPos){
+      var gapD = Math.round((r.ms - lastPos.ms) / 86400000);
+      gap = gapD + ' 天';
+      var cover = (p.cycleCustom && p.cycleDays > 0) ? p.cycleDays
+                : (curProduct() ? curProduct().daysPerBox : 30) * lastPos.qty;
+      var diff = gapD - cover;
+      dev = diff === 0 ? '<span style="color:#008000;font-weight:500">按期</span>'
+          : diff < 0  ? '<span style="color:#008000;font-weight:500">提前 ' + (-diff) + ' 天</span>'
+          :             '<span style="color:#E54545;font-weight:500">逾期 ' + diff + ' 天</span>';
+    }
+    if (r.qty > 0) lastPos = r;
+    var qtyCell = r.qty < 0
+      ? '<span style="color:#E54545;font-weight:600" title="退货/冲红">' + r.qty + '（退）</span>'
+      : r.qty;
+    return '<tr>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + E.fmtDate(r.ms) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3;text-align:right">' + qtyCell + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + gap + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + dev + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(r.store || '') + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(r.hosp || '') + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(r.doctor ? (mask ? maskName(r.doctor) : r.doctor) : '') + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(r.pay || '') + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(r.indication || r.diag || '') + '</td>' +
+      '</tr>';
+  }).join('');
+  $('#patList').innerHTML = head + (body || '<tr><td colspan="9" style="padding:10px;color:var(--ink2)">无购药记录</td></tr>') + '</tbody></table>';
+  $('#patOvl').hidden = false;
+}
+$('#patClose').onclick = function(){ $('#patOvl').hidden = true; ST.patOpenKey = null; };
+$('#patOvl').addEventListener('click', function(ev){ if (ev.target === this){ this.hidden = true; ST.patOpenKey = null; } });
 $('#btnCopySum').onclick = function(){
   var txt = '【整体小结 · ' + (curProduct() ? curProduct().label : '') + ' · 周期 ' + $('#sumFrom').value + ' ~ ' + $('#sumTo').value + '】\n' + $('#sumBody').innerText;
   var b = this;
@@ -3796,7 +3876,8 @@ var NOTICE = {
     '🛠️ <b>修复整体小结「应回购」误判</b>：应回购日现在按「该次购药盒数 × 每盒天数」推算（与明细表「预计下次购药日期」同口径）。此前买 2 盒的患者被按 1 盒周期提前判定应回购；本次修复后部分多盒购药患者的 应回购/已回购/未回购/提前·推迟 数字会变化（更准确）',
     '🎨 <b>配色调整</b>：整体换回四色体系，断药预警改为金黄 <b>#FCA311</b>，整体小结区数字与日历同步金黄化（其余区域保持主蓝）',
     '📌 <b>患者明细「姓名」列冻结</b>：横向滚动填写信息时姓名始终贴在最左侧',
-    '📋 <b>整体小结「未回购」明细补随访信息</b>：下钻新增 末次随访 / 用药状态 / 减停药原因 / 用药问题反馈 四列，「导出名单」同步'
+    '📋 <b>整体小结「未回购」明细补随访信息</b>：下钻新增 末次随访 / 用药状态 / 减停药原因 / 用药问题反馈 四列，「导出名单」同步',
+    '🗂️ <b>患者购药档案</b>：明细表里<b>点击患者姓名</b>，弹窗查看该患者在底表里的全部购药行为——日期/盒数（退货红字标注）/距上次间隔/是否按期（提前·逾期天数）/药房/医院/医生/支付方式/适应症，换药房、换医生一目了然'
   ]
 };
 (function(){
