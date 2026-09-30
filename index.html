@@ -6,14 +6,14 @@
 <title>销售患者工作台</title>
 <style>
   :root{
-    --bg:#F7F5FA; --card:#FFFFFF; --line:#E8E4F0;
-    --ink:#3B3550; --ink2:#7A7391; --ink3:#A49DBA;
-    --violet:#9B8CC4; --violet-l:#EDE9F6;
-    --blue:#7C9BC0; --blue-l:#E7EEF6;
-    --green:#79A98A; --green-l:#E6F0E9;
-    --amber:#DDA46B; --amber-l:#FAEEE0;
-    --rose:#D98C8C; --rose-l:#FAE9E9;
-    --r:10px; --sd:0 1px 3px rgba(90,80,130,.07);
+    --bg:#EDF2F6; --card:#FFFFFF; --line:#DDE4EC;
+    --ink:#494953; --ink2:#71737E; --ink3:#9EA1AB;
+    --violet:#6a7efc; --violet-l:#EDF0FE;
+    --blue:#8FA0FD; --blue-l:#EEF1FE;
+    --green:#6a7efc; --green-l:#EDF0FE;
+    --amber:#FFB20F; --amber-l:#FDEAE2;
+    --rose:#ff5656; --rose-l:#FFECEC;
+    --r:10px; --sd:0 1px 3px rgba(73,73,83,.08);
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -42,7 +42,7 @@
     background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer}
   button:hover{border-color:var(--violet);color:var(--violet)}
   button.pri{background:var(--violet);border-color:var(--violet);color:#fff}
-  button.pri:hover{background:#8A79B8;color:#fff}
+  button.pri:hover{background:#5266E8;color:#fff}
   button:disabled{opacity:.45;cursor:not-allowed}
   select,input{cursor:pointer}
   input[type=text]{cursor:text;min-width:130px}
@@ -59,7 +59,7 @@
   .kpi.b .vl{color:var(--blue)}
   /* 可点击下钻的指标卡 */
   .kpi-click{cursor:pointer;transition:.12s;user-select:none}
-  .kpi-click:hover{border-color:var(--violet);box-shadow:0 2px 8px rgba(155,140,196,.18)}
+  .kpi-click:hover{border-color:var(--violet);box-shadow:0 2px 8px rgba(106,126,252,.25)}
   .kpi-active{border-color:var(--violet);box-shadow:0 0 0 2px var(--violet-l)}
   .kpi-flash{animation:flash 1.3s ease}
   @keyframes flash{0%,100%{background:var(--card)}25%{background:var(--violet-l)}}
@@ -84,8 +84,8 @@
   .qrow:first-child{border-top:none}
   .tag{flex:none;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
   .tag.ok{background:var(--green-l);color:var(--green)}
-  .tag.warn{background:var(--amber-l);color:#B87B3E}
-  .tag.err{background:var(--rose-l);color:#B96B6B}
+  .tag.warn{background:var(--amber-l);color:#FFB20F}
+  .tag.err{background:var(--rose-l);color:#E54545}
   .tag.info{background:var(--blue-l);color:var(--blue)}
   .qrow .txt{flex:1;color:var(--ink2)}
   .qrow .txt b{color:var(--ink);font-weight:600}
@@ -96,18 +96,18 @@
   .tbox{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
     box-shadow:var(--sd);overflow:auto;max-height:calc(100vh - 305px);min-height:220px}
   table{border-collapse:separate;border-spacing:0;width:100%;font-size:12px;white-space:nowrap;line-height:1.35}
-  th{position:sticky;top:0;background:#F2EFF8;color:var(--ink);font-weight:600;
+  th{position:sticky;top:0;background:#E9EEF4;color:var(--ink);font-weight:600;
     padding:4px 8px;text-align:left;border-bottom:1px solid var(--line);
     cursor:pointer;user-select:none;z-index:2}
   th:hover{background:var(--violet-l)}
-  th.na{cursor:default} th.na:hover{background:#F2EFF8}
+  th.na{cursor:default} th.na:hover{background:#E9EEF4}
   th .ar{color:var(--violet);font-size:10px;margin-left:2px}
-  td{padding:3px 8px;border-bottom:1px solid #F1EEF6;vertical-align:middle}
+  td{padding:3px 8px;border-bottom:1px solid #E9EDF3;vertical-align:middle}
   /* 冻结姓名列（2026-09-29）：横向滚动时姓名跟随，方便对应填写信息 */
   th.nm{left:0;z-index:3;border-right:1px solid var(--line)}
   td.nm{position:sticky;left:0;background:var(--card);z-index:1;border-right:1px solid var(--line)}
   tbody tr:hover td.nm{background:var(--violet-l)}
-  tbody tr.row-sel td.nm{background:#E4DCF5;box-shadow:inset 3px 0 0 var(--violet)}
+  tbody tr.row-sel td.nm{background:#E3E9FE;box-shadow:inset 3px 0 0 var(--violet)}
   /* 列设置下拉 */
   .colset{position:relative}
   .colset summary{list-style:none;cursor:pointer;user-select:none}
@@ -119,98 +119,98 @@
   #colSetBox .cbtn{margin-top:6px;width:100%;text-align:center;font-size:12px;padding:3px 0}
   tbody tr:hover{background:var(--violet-l)}
   /* 选中行：更鲜明的紫底 + 左侧紫条（用户 2026-09-18），点击行切换选中，再点取消 */
-  tbody tr.row-sel{background:#E4DCF5;box-shadow:inset 3px 0 0 var(--violet)}
-  tbody tr.row-sel:hover{background:#DCD2F0}
-  tbody tr.row-sel td{border-bottom-color:#D4C9EC}
+  tbody tr.row-sel{background:#E3E9FE;box-shadow:inset 3px 0 0 var(--violet)}
+  tbody tr.row-sel:hover{background:#D5DDFC}
+  tbody tr.row-sel td{border-bottom-color:#C7D2F8}
   /* 整体小结（2026-09-18）：自动统计 + 橙色数字人工可改 + 复制 */
   .sumHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
   .sumTitle{font-size:14px;color:var(--ink)}
   .sumCycle{display:inline-flex;gap:4px}
   .sumBtn{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);
     background:var(--card);color:var(--ink2);cursor:pointer}
-  .sumBtn.on{background:var(--violet);border-color:var(--violet);color:#fff}
+  .sumBtn.on{background:#FFB20F;border-color:#FFB20F;color:#fff}
   .sumRange{font-size:12.5px;color:var(--ink2)}
   .sumDaysLab{font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:4px}
-  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:var(--violet);font-weight:700;
+  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:#FFB20F;font-weight:700;
     border:1px solid var(--line);border-radius:6px;padding:2px 4px;text-align:center;background:#fff}
-  .sumDaysLab input:focus{outline:none;border-color:var(--violet)}
+  .sumDaysLab input:focus{outline:none;border-color:#FFB20F}
   /* 区间日历（2026-09-20 首版，2026-09-23 抽成通用组件）：一个日历面板选起止日期 */
   .calAnchor{position:relative}
   .calPanel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--card);
-    border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(90,80,130,.16);
+    border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(73,73,83,.16);
     padding:10px;width:252px;user-select:none}
   .calHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
   .calHead b{font-size:13px;color:var(--ink)}
-  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:var(--violet);
+  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:#FFB20F;
     padding:2px 9px;border-radius:8px;line-height:1.2}
-  .calNav:hover{background:var(--violet-l)}
+  .calNav:hover{background:#FFF3D9}
   .calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
   .calWd{font-size:11px;color:var(--ink2);padding:2px 0}
   .calD{font-size:12px;padding:4px 0;border-radius:8px;cursor:pointer;color:var(--ink)}
-  .calD:hover{background:var(--violet-l)}
-  .calD.inR{background:var(--violet-l)}
-  .calD.ep{background:var(--violet);color:#fff;font-weight:700}
+  .calD:hover{background:#FFF3D9}
+  .calD.inR{background:#FFF3D9}
+  .calD.ep{background:#FFB20F;color:#fff;font-weight:700}
   .calHint{font-size:11px;color:var(--ink3);margin-top:6px;text-align:center}
   .calFoot{display:flex;justify-content:flex-end;margin-top:2px}
   .calClear{border:none;background:none;cursor:pointer;font-size:11.5px;color:var(--rose);
     padding:2px 8px;border-radius:8px}
   .calClear:hover{background:var(--rose-l)}
-  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid var(--violet);
-    background:var(--violet-l);color:var(--violet);cursor:pointer}
-  .sumCopy:hover{background:var(--violet);color:#fff}
-  .sumBody{background:#FBFAFD;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
+  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid #FFB20F;
+    background:#FFF3D9;color:#FFB20F;cursor:pointer}
+  .sumCopy:hover{background:#FFB20F;color:#fff}
+  .sumBody{background:#F7F9FC;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
     font-size:13px;color:var(--ink);line-height:2}
-  .sumBody .sn{font-weight:700;color:var(--violet);margin-right:6px}
-  .snum{color:#E8A23D;font-weight:700;cursor:pointer;border-bottom:1px dashed #E8A23D;padding:0 2px}
-  .snum:hover{background:#FDF3E3}
-  .snum input{width:64px;font:inherit;font-weight:700;color:var(--violet);border:1px solid var(--violet);
+  .sumBody .sn{font-weight:700;color:#FFB20F;margin-right:6px}
+  .snum{color:#FFB20F;font-weight:700;cursor:pointer;border-bottom:1px dashed #FFB20F;padding:0 2px}
+  .snum:hover{background:#FFF3D9}
+  .snum input{width:64px;font:inherit;font-weight:700;color:#FFB20F;border:1px solid #FFB20F;
     border-radius:5px;padding:0 4px;text-align:center}
   .snum input:focus{outline:none;background:#fff}
   .sumTip{font-size:12px;color:var(--ink3);margin-top:6px}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
   .st{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600}
-  .st-在治{background:var(--green-l);color:#4F7C5E}
-  .st-断药预警{background:var(--amber-l);color:#B87B3E}
-  .st-脱落{background:var(--rose-l);color:#B96B6B}
-  td.overdue{color:#B96B6B;font-weight:600}
-  .edit{background:#FFFDF6;border:1px solid #EFE6CF;border-radius:6px;padding:2px 6px;
+  .st-在治{background:var(--green-l);color:#4F63D0}
+  .st-断药预警{background:var(--amber-l);color:#FFB20F}
+  .st-脱落{background:var(--rose-l);color:#E54545}
+  td.overdue{color:#E54545;font-weight:600}
+  .edit{background:#F7F9FE;border:1px solid #D9E0FC;border-radius:6px;padding:2px 6px;
     font:inherit;color:var(--ink);width:100%;min-width:70px;cursor:pointer}
   .edit:focus{outline:none;border-color:var(--violet);background:#fff}
   input.edit[data-f="note"]{min-width:150px}
   input.edit[data-f="note"]:focus{position:relative;width:360px;z-index:3;
-    box-shadow:0 2px 12px rgba(90,70,160,.2)}
+    box-shadow:0 2px 12px rgba(106,126,252,.25)}
   /* 备注大编辑窗：长备注完整可见可编辑 */
   #noteEd{position:fixed;z-index:98;width:480px;max-width:calc(100vw - 24px);
-    background:#FFFDF6;border:1px solid var(--violet);border-radius:10px;
-    box-shadow:0 10px 30px rgba(60,52,90,.3);padding:10px}
+    background:#F7F9FE;border:1px solid var(--violet);border-radius:10px;
+    box-shadow:0 10px 30px rgba(73,73,83,.3);padding:10px}
   #noteEd .ne-head{display:flex;justify-content:space-between;align-items:center;
     font-size:12px;color:var(--ink2);margin-bottom:6px}
   #noteEd .ne-head b{color:var(--ink)}
   #neClose{cursor:pointer;color:var(--ink3);font-size:18px;padding:0 4px;line-height:1}
   #neClose:hover{color:var(--violet)}
-  #neTa{width:100%;height:160px;resize:vertical;border:1px solid #EFE6CF;border-radius:7px;
+  #neTa{width:100%;height:160px;resize:vertical;border:1px solid #D9E0FC;border-radius:7px;
     padding:7px 9px;font:inherit;font-size:12.5px;line-height:1.7;color:var(--ink);
     background:#fff;box-sizing:border-box;white-space:pre-wrap}
   #neTa:focus{outline:none;border-color:var(--violet)}
   .ne-foot{font-size:11px;color:var(--ink3);margin-top:5px}
-  .edit.done{background:#F4F9F5;border-color:#DCEDE1}
+  .edit.done{background:#F3F6FE;border-color:#D9E0FC}
   .ref{display:block;color:var(--ink3);font-size:10px;white-space:nowrap}
   .mono{font-variant-numeric:tabular-nums;letter-spacing:.2px}
   .empty{padding:40px;text-align:center;color:var(--ink3)}
   .foot{color:var(--ink3);font-size:11.5px;margin-top:8px;text-align:right}
-  .nudge{background:var(--blue-l);border:1px solid #D8E3EE;color:#4A6B8A;
+  .nudge{background:var(--blue-l);border:1px solid #D5DEEC;color:#44549E;
     border-radius:7px;padding:6px 12px;font-size:12.5px;margin-bottom:10px}
   .sw{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);cursor:pointer}
   .sw input{cursor:pointer}
   .dr{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--ink2)}
-  .dr input[type=date]{padding:2px 4px;border:1px solid #EFE6CF;border-radius:6px;
-    font:inherit;font-size:12.5px;background:#FFFDF6;color:var(--ink);min-width:118px}
+  .dr input[type=date]{padding:2px 4px;border:1px solid #D9E0FC;border-radius:6px;
+    font:inherit;font-size:12.5px;background:#F7F9FE;color:var(--ink);min-width:118px}
   .dr input[type=date]:focus{outline:none;border-color:var(--violet);background:#fff}
 
   /* 按钮悬浮注释 */
   #tip{position:fixed;z-index:99;pointer-events:none;max-width:320px;
-    background:#4A4361;color:#F2EFF8;border-radius:7px;padding:8px 11px;
-    font-size:12px;line-height:1.6;box-shadow:0 6px 20px rgba(60,52,90,.25)}
+    background:#494953;color:#E9EEF4;border-radius:7px;padding:8px 11px;
+    font-size:12px;line-height:1.6;box-shadow:0 6px 20px rgba(73,73,83,.25)}
   #tip b{color:#fff}
   #tip .t{display:block;font-weight:600;margin-bottom:2px;color:#fff}
 </style>
@@ -224,32 +224,32 @@
 </header>
 
 <style>
-#notice{margin:-4px 0 14px;border:1px solid #C7D7F0;background:#EFF5FE;border-radius:var(--r);font-size:13px;color:#3B5178;overflow:hidden}
+#notice{margin:-4px 0 14px;border:1px solid #C9D3FD;background:#F0F3FE;border-radius:var(--r);font-size:13px;color:#3D4B9E;overflow:hidden}
 #notice .nbar{display:flex;align-items:center;gap:8px;padding:7px 12px}
 #notice .ntxt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#notice .nbtn{flex:none;border:none;background:#DCE9FB;color:#3B5178;border-radius:6px;padding:2px 9px;cursor:pointer;font-size:12px}
-#notice .nbtn:hover{background:#CBE0F8}
-#notice #nList{border-top:1px dashed #C7D7F0;padding:8px 14px 10px;line-height:1.9}
-#notice #nList b{color:#2B3F66}
+#notice .nbtn{flex:none;border:none;background:#DFE5FD;color:#3D4B9E;border-radius:6px;padding:2px 9px;cursor:pointer;font-size:12px}
+#notice .nbtn:hover{background:#DFE5FD}
+#notice #nList{border-top:1px dashed #C9D3FD;padding:8px 14px 10px;line-height:1.9}
+#notice #nList b{color:#3D4B9E}
 #notice #nList .ni{margin:2px 0}
 /* ---------- 品种半自动建档 + 品种管理 弹窗 ---------- */
-.ovl{position:fixed;inset:0;background:rgba(59,53,80,.35);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
+.ovl{position:fixed;inset:0;background:rgba(73,73,83,.35);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
 .ovl[hidden]{display:none !important}   /* 关键：作者层 display:flex 会压过 hidden 属性的 UA 默认值，必须显式压制 */
 /* 新手引导（聚光灯式）：真实界面上高亮元素 + 说明卡 */
 #tourOvl{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2000}
 #tourOvl[hidden]{display:none}
 #tourCatch{position:absolute;left:0;top:0;right:0;bottom:0;background:transparent}
-#tourHl{position:absolute;display:none;border:2.5px solid #534AB7;border-radius:12px;box-shadow:0 0 0 200vmax rgba(44,44,42,.45);pointer-events:none;transition:all .25s}
-#tourCard{position:absolute;width:360px;max-width:calc(100vw - 24px);background:#fff;border:1.5px solid #534AB7;border-radius:14px;padding:16px 20px;z-index:2005}
-#tourStep{font-size:12.5px;color:#534AB7;font-weight:600;margin-bottom:4px}
-#tourTitle{font-size:18px;font-weight:600;color:#3C3489;margin-bottom:6px}
-#tourText{font-size:14.5px;color:#444441;line-height:1.65;margin-bottom:14px}
+#tourHl{position:absolute;display:none;border:2.5px solid #6a7efc;border-radius:12px;box-shadow:0 0 0 200vmax rgba(73,73,83,.45);pointer-events:none;transition:all .25s}
+#tourCard{position:absolute;width:360px;max-width:calc(100vw - 24px);background:#fff;border:1.5px solid #6a7efc;border-radius:14px;padding:16px 20px;z-index:2005}
+#tourStep{font-size:12.5px;color:#6a7efc;font-weight:600;margin-bottom:4px}
+#tourTitle{font-size:18px;font-weight:600;color:#3D4B9E;margin-bottom:6px}
+#tourText{font-size:14.5px;color:#494953;line-height:1.65;margin-bottom:14px}
 .tourtbtns{display:flex;gap:10px;align-items:center}
-.tourtbtns button{font-size:14px;padding:8px 14px;border-radius:10px;border:1.5px solid #AFA9EC;background:#fff;color:#3C3489;cursor:pointer}
-.tourtbtns .pri{background:#534AB7;color:#fff;border-color:#534AB7}
-#tourSkip{border-color:#D3D1C7;color:#5F5E5A}
-#tourBall{position:fixed;right:18px;bottom:18px;z-index:1990;width:52px;height:52px;border-radius:50%;background:#534AB7;color:#fff;font-size:22px;font-weight:600;border:3px solid #fff;cursor:pointer}
-#tourBall:hover{background:#3C3489}
+.tourtbtns button{font-size:14px;padding:8px 14px;border-radius:10px;border:1.5px solid #A8B4FD;background:#fff;color:#3D4B9E;cursor:pointer}
+.tourtbtns .pri{background:#6a7efc;color:#fff;border-color:#6a7efc}
+#tourSkip{border-color:#C6CDD6;color:#71737E}
+#tourBall{position:fixed;right:18px;bottom:18px;z-index:1990;width:52px;height:52px;border-radius:50%;background:#6a7efc;color:#fff;font-size:22px;font-weight:600;border:3px solid #fff;cursor:pointer}
+#tourBall:hover{background:#3D4B9E}
 #tourBall[hidden]{display:none}
 /* 可搜索下拉：原生 select 升级为自定义面板（点开顶部带搜索框），select 本体保留为数据源与事件源 */
 .ssel{position:relative;display:inline-block}
@@ -260,7 +260,7 @@
 .ssel-btn .ar{font-size:10px;color:var(--ink2)}
 .ssel-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:55;width:230px;
   background:var(--card);border:1px solid var(--line);border-radius:9px;padding:6px;
-  box-shadow:0 8px 24px rgba(59,53,80,.14)}
+  box-shadow:0 8px 24px rgba(73,73,83,.14)}
 .ssel-panel input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:6px;
   padding:5px 8px;font-size:13px;color:var(--ink);background:#fff;margin-bottom:4px}
 .ssel-panel input:focus{outline:none;border-color:var(--violet)}
@@ -268,13 +268,13 @@
 .ssel-list{max-height:220px;overflow:auto}
 .ssel-item{padding:6px 8px;border-radius:6px;font-size:13px;color:var(--ink);cursor:pointer;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ssel-item:hover{background:#F3EFFB}
+.ssel-item:hover{background:#EDF0FE}
 .ssel-item.on{color:var(--violet);font-weight:600}
 .ssel-empty{padding:8px;font-size:12px;color:var(--ink2);text-align:center}
-.mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px 18px;box-shadow:0 8px 30px rgba(59,53,80,.18)}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:16px 18px;box-shadow:0 8px 30px rgba(73,73,83,.18)}
 .mcard h3{margin:0 0 4px;font-size:15px;color:var(--ink)}
 .mcard .msub{font-size:12px;color:var(--ink2);margin-bottom:12px}
-.pcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#FCFBFE}
+.pcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#F7F9FC}
 .pcard .ptitle{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px}
 .pcard .prow{display:flex;align-items:center;gap:6px;margin:5px 0;font-size:12px;color:var(--ink2)}
 .pcard .prow b{width:58px;flex:none;font-weight:600}
@@ -304,8 +304,8 @@
   <p>把 销售底表 / 随访任务表 (.xlsx) 拖到这里自动识别，或点击选择</p>
   <div class="hint">首次使用请选「全量替换」载入完整底表；以后每月新增数据选「增量追加」即可自动去重合并。<br>
   患者池与已填写的诊断/备注都保存在本机浏览器，下次打开无需再放文件。</div>
-  <div id="dropStatus" style="margin-top:10px;font-size:14.5px;color:#0F6E56;font-weight:600"></div>
-  <div><button id="btnTourDrop" type="button" style="font-size:15px;padding:9px 16px;border-radius:10px;border:1.5px solid #AFA9EC;background:#fff;color:#3C3489;cursor:pointer">第一次使用？点这里看新手引导</button></div>
+  <div id="dropStatus" style="margin-top:10px;font-size:14.5px;color:#4F63D0;font-weight:600"></div>
+  <div><button id="btnTourDrop" type="button" style="font-size:15px;padding:9px 16px;border-radius:10px;border:1.5px solid #A8B4FD;background:#fff;color:#3D4B9E;cursor:pointer">第一次使用？点这里看新手引导</button></div>
   <input type="file" id="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
 
@@ -363,12 +363,12 @@
 
   <div id="tip" hidden></div>
 
-  <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#DDD4EE;color:#5A4E7A"></div>
+  <div class="nudge" id="poolBar" hidden style="background:var(--violet-l);border-color:#D5DDFC;color:#3D4B9E"></div>
 
   <div id="dStoreBar" hidden style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;
        background:#FFF;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sd);font-size:13px;color:var(--ink2)">
     <span><b>查看药房</b></span>
-    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #EFE6CF;border-radius:6px;background:#FFFDF6;color:var(--ink);min-width:200px;max-width:380px"><option value="">全部药房</option></select>
+    <select id="dStore" style="padding:3px 8px;font:inherit;border:1px solid #D9E0FC;border-radius:6px;background:#F7F9FE;color:var(--ink);min-width:200px;max-width:380px"><option value="">全部药房</option></select>
     <span id="dStoreCount" style="color:var(--ink3);font-size:11px"></span>
     <span style="flex:1"></span>
     <button id="dStoreClear" hidden style="border:none;background:transparent;color:var(--violet);cursor:pointer;font-size:12px;padding:2px 6px">清除筛选</button>
@@ -1146,7 +1146,7 @@ function updatePoolInfo(){
     (rg[0] ? '　·　销售时间 ' + E.fmtDate(rg[0]) + ' ~ ' + E.fmtDate(rg[1]) : '') +
     '　·　品种 ' + (pr ? pr.label : ST.pid) + '，每盒 ' + (pr ? pr.daysPerBox : 30) + ' 天' +
     (BE.on
-      ? '　·　' + (BE.fail ? '<span style="color:#c0392b">后端保存失败，已暂存浏览器</span>'
+      ? '　·　' + (BE.fail ? '<span style="color:#E54545">后端保存失败，已暂存浏览器</span>'
                   : BE.saving ? '保存中…' : '已连本地后端 · 数据存 F:\\wb-backend\\data')
       : '　·　保存在本机浏览器，换电脑请用「导出备份(含数据池)」');
 }
@@ -1943,12 +1943,15 @@ function renderSummary(){
        退货行不再制造幻影应回购日/虚假已回购，购药节奏也不再被「买了又退、退了又买」带偏 */
     var evs = netEvents(p.buyMs || [], p.buyQty);
     if (!evs.length) return;                       // 购入全被退货抵销：不参与小结统计
-    /* 用药周期按患者覆盖（2026-09-20）：engine 输出的 cycleDays 已含自定义值，未自定义=品种默认 */
-    var D = (p.cycleDays > 0 ? p.cycleDays : sumDaysVal()) * 86400000;
+    /* 用药周期（2026-09-30 口径 v3）：人工自定义周期（cycleCustom）整体沿用人工值；
+       未自定义则每笔购药事件的应回购日 = 该笔净盒数 × 单盒天数（与明细表 nextMs 口径一致）。
+       注意 engine 的 cycleDays 未自定义时=品种默认值（恒 > 0），不能用它判断是否自定义。
+       修复：v2 对每笔只加 1 个周期，买 2 盒的患者被提前判定应回购（如 8-31 买 2 盒被算成 9-28 应回购） */
+    function evDays(q){ return (p.cycleCustom && p.cycleDays > 0) ? p.cycleDays : sumDaysVal() * (q > 0 ? q : 1); }
     var hit = false, hb = false, hitMs = null, jHit = -1;
     var inP = false, firstInP = null, lastInP = null, jL = -1, inQty = 0;   // 本期购药（周期内有购药事件）+ 周期内盒数
     for (var j = 0; j < evs.length; j++){
-      var d2 = evs[j].ms + D;                      // 该次购药事件的应回购日
+      var d2 = evs[j].ms + evDays(evs[j].qty) * 86400000;   // 该次购药事件的应回购日（按该次盒数）
       if (d2 >= ws && d2 < we){
         hit = true;
         if (hitMs == null){ hitMs = d2; jHit = j; }
@@ -1978,7 +1981,7 @@ function renderSummary(){
         dev: Math.round((evs[jHit + 1].ms - hitMs) / 86400000) });
     }
     if (inP && evs[0].ms < ws && !hit && jL > 0){
-      var prevDue = evs[jL - 1].ms + D;            // 上一次购药事件对应的应回购日
+      var prevDue = evs[jL - 1].ms + evDays(evs[jL - 1].qty) * 86400000;   // 上一次购药事件对应的应回购日（按该次盒数）
       detail.buyNoDue.push({ p: p, refMs: lastInP, dueMs: prevDue,
         dev: Math.round((lastInP - prevDue) / 86400000) });
     }
@@ -2455,7 +2458,7 @@ function td2(main, sub, cls){
 function tdNext(p){
   var sub = p.status === '脱落' ? '逾期 ' + p.overdueDays + ' 天' : '';
   return '<td>' + esc(E.fmtDate(p.nextMs)) +
-    (sub ? '<span class="ref" style="color:#B96B6B">' + esc(sub) + '</span>' : '') + '</td>';
+    (sub ? '<span class="ref" style="color:#E54545">' + esc(sub) + '</span>' : '') + '</td>';
 }
 /* 备注列：输入框 + 自动记录的日期；内容长时悬停看全文、聚焦时输入框展宽 */
 function tdNote(p, m){
@@ -3229,26 +3232,26 @@ function buildSnapShareHtml(pool, manual, pid, name, mask, store){
     '<meta name="viewport" content="width=device-width,initial-scale=1">\n' +
     '<title>' + esc(String(name)) + ' · ' + esc(snapProdLabel(pid)) + '</title>\n' +
     '<style>\n' +
-    ':root{--ink:#3A3550;--ink2:#6B6480;--line:#EAE4F2;--bg:#FAF8FC}\n' +
+    ':root{--ink:#494953;--ink2:#71737E;--line:#DDE4EC;--bg:#F4F7FA}\n' +
     '*{box-sizing:border-box}body{margin:0;font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--ink)}\n' +
     '.wrap{max-width:1120px;margin:0 auto;padding:24px 16px 60px}\n' +
     'h1{font-size:20px;margin:0 0 4px}.sub{color:var(--ink2);font-size:12.5px;margin-bottom:12px}\n' +
     '.kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}\n' +
-    '.kc{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 2px 8px rgba(124,107,175,.06)}\n' +
+    '.kc{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 2px 8px rgba(106,126,252,.08)}\n' +
     '.kc b{display:block;font-size:20px;line-height:1.3}.kc span{font-size:12px;color:var(--ink2)}\n' +
-    '.kc.g b{color:#2F7D46}.kc.y b{color:#9C6B1B}.kc.r b{color:#B04A4A}\n' +
-    '.kc.click{cursor:pointer;user-select:none;transition:box-shadow .15s,border-color .15s}.kc.click:hover{box-shadow:0 3px 12px rgba(124,107,175,.18)}\n' +
-    '.kc.on{border-color:#9A8CC8;background:#F5F1FB}\n' +
+    '.kc.g b{color:#4F63D0}.kc.y b{color:#FFB20F}.kc.r b{color:#E54545}\n' +
+    '.kc.click{cursor:pointer;user-select:none;transition:box-shadow .15s,border-color .15s}.kc.click:hover{box-shadow:0 3px 12px rgba(106,126,252,.2)}\n' +
+    '.kc.on{border-color:#6a7efc;background:#EDF0FE}\n' +
     '.span{color:var(--ink2);font-size:12.5px;margin-bottom:14px}.span b{color:var(--ink)}\n' +
     '.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}\n' +
     'input,select{font:inherit;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}\n' +
     '#q{width:250px}.cnt{color:var(--ink2);font-size:12.5px}\n' +
-    '.tbox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto;box-shadow:0 2px 10px rgba(124,107,175,.08);max-height:78vh}\n' +
+    '.tbox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:auto;box-shadow:0 2px 10px rgba(106,126,252,.1);max-height:78vh}\n' +
     'table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}\n' +
-    'th{position:sticky;top:0;background:#F3EFF9;text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid var(--line)}\n' +
-    'td{padding:7px 10px;border-bottom:1px solid #F4F1F8}tr:last-child td{border-bottom:none}\n' +
+    'th{position:sticky;top:0;background:#E9EEF4;text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid var(--line)}\n' +
+    'td{padding:7px 10px;border-bottom:1px solid #E9EDF3}tr:last-child td{border-bottom:none}\n' +
     '.b{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px}\n' +
-    '.s0{background:#E5F3E8;color:#2F7D46}.s1{background:#FBF0DC;color:#9C6B1B}.s2{background:#FBE4E4;color:#B04A4A}\n' +
+    '.s0{background:#EDF0FE;color:#4F63D0}.s1{background:#FDEAE2;color:#FFB20F}.s2{background:#FFECEC;color:#E54545}\n' +
     '.note{white-space:normal;min-width:150px;max-width:280px}\n' +
     '.empty{padding:24px;text-align:center;color:var(--ink2)}\n' +
     '</style>\n</head>\n<body><div class="wrap">\n' +
@@ -3603,27 +3606,27 @@ function openSumDrill(kind, sk){
       var tip = kind === 'dueNoBuy'
         ? '应回购 ' + E.fmtDate(x.refMs) + ' · 实际购药 ' + E.fmtDate(x.actMs)
         : '应回购 ' + E.fmtDate(x.dueMs) + ' · 实际购药 ' + E.fmtDate(x.refMs);
-      var devCol = x.dev < 0 ? '#0F6E56' : x.dev > 0 ? '#A32D2D' : 'inherit';
-      devCell = '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6" title="' + tip + '">' +
+      var devCol = x.dev < 0 ? '#4F63D0' : x.dev > 0 ? '#E54545' : 'inherit';
+      devCell = '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3" title="' + tip + '">' +
         '<span style="color:' + devCol + ';font-weight:500">' + devTxt(x.dev) + '</span></td>';
     }
     var qtyCell = withQty
-      ? '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6;text-align:right">' + (x.qty != null ? x.qty : 0) + '</td>' : '';
+      ? '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3;text-align:right">' + (x.qty != null ? x.qty : 0) + '</td>' : '';
     var fuCell = '';
     if (withFu){
       var f = fuVals(p);
-      fuCell = '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.last) : '') + '</td>' +
-        '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.med) : '') + '</td>' +
-        '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.reason) : '') + '</td>' +
-        '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (f ? esc(f.issue) : '') + '</td>';
+      fuCell = '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (f ? esc(f.last) : '') + '</td>' +
+        '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (f ? esc(f.med) : '') + '</td>' +
+        '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (f ? esc(f.reason) : '') + '</td>' +
+        '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (f ? esc(f.issue) : '') + '</td>';
     }
     return '<tr>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(x.refMs) + '</td>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) + '</td>' +
-      '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + (mask ? maskPhone(p.phone) : p.phone) + '</td>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + E.fmtDate(p.lastBuyMs) + '</td>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.store || '') + '</td>' +
-      '<td style="padding:4px 8px;border-bottom:1px solid #F1EEF6">' + esc(p.hospital || '') + '</td>' + fuCell + devCell + qtyCell + '</tr>';
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + E.fmtDate(x.refMs) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) + '</td>' +
+      '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (mask ? maskPhone(p.phone) : p.phone) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + E.fmtDate(p.lastBuyMs) + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(p.store || '') + '</td>' +
+      '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + esc(p.hospital || '') + '</td>' + fuCell + devCell + qtyCell + '</tr>';
   }).join('');
   $('#sumList').innerHTML = head + (body || '<tr><td colspan="' + cols.length + '" style="padding:10px;color:var(--ink2)">无（该指标当前为 0 人）</td></tr>') + '</tbody></table>';
   var sm = sumManual(ST.pid);
@@ -3786,15 +3789,14 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260929',
-  date: '2026-09-29',
-  sum: '冻结姓名列、修复购药节奏「提前 30 天」、未回购明细补随访信息、患者分享页升级',
+  ver: 'v20260930',
+  date: '2026-09-30',
+  sum: '修复小结应回购日未按购药盒数推算、整体小结配色调整、预警色换金黄',
   items: [
-    '📌 <b>患者明细「姓名」列冻结</b>：横向滚动到后面的列填写信息时，姓名始终贴在最左侧，不用来回拖动核对（悬停/选中行的高亮同步适配）',
-    '🛠️ <b>修复购药节奏「提前 30 天」类错误</b>：买了又退、退了又买不再被当成两次购药——退货抵销最近一笔购入，退后再买算一次新购，同日多笔合并为一次；因此部分有退货记录患者的应回购/已回购/未回购/盒数统计会有小幅变化（更准确）',
-    '📋 <b>整体小结「未回购」明细补随访信息</b>：下钻明细新增 末次随访 / 用药状态 / 减停药原因 / 用药问题反馈 四列（与明细表随访列同口径），「导出名单」同步带上，方便挨个电话回访',
-    '📤 <b>患者分享页升级</b>：导出的分享 HTML 跟随看板「列设置」的显隐；脱敏拆成「姓名/电话」和「医生」两个独立开关；分享页自带状态总结卡（可点选筛选明细）和底表销售时间跨度',
-    '📅 <b>筛选日历化</b>：备注时间、末次随访时间改为区间日历筛选（与其他日期筛选同款交互）；从未随访/从未备注的患者不属于任何区间'
+    '🛠️ <b>修复整体小结「应回购」误判</b>：应回购日现在按「该次购药盒数 × 每盒天数」推算（与明细表「预计下次购药日期」同口径）。此前买 2 盒的患者被按 1 盒周期提前判定应回购；本次修复后部分多盒购药患者的 应回购/已回购/未回购/提前·推迟 数字会变化（更准确）',
+    '🎨 <b>配色调整</b>：整体换回四色体系，断药预警改为金黄 <b>#FFB20F</b>，整体小结区数字与日历同步金黄化（其余区域保持主蓝）',
+    '📌 <b>患者明细「姓名」列冻结</b>：横向滚动填写信息时姓名始终贴在最左侧',
+    '📋 <b>整体小结「未回购」明细补随访信息</b>：下钻新增 末次随访 / 用药状态 / 减停药原因 / 用药问题反馈 四列，「导出名单」同步'
   ]
 };
 (function(){
