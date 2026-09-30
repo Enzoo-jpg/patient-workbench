@@ -1959,15 +1959,17 @@ function renderSummary(){
        退货行不再制造幻影应回购日/虚假已回购，购药节奏也不再被「买了又退、退了又买」带偏 */
     var evs = netEvents(p.buyMs || [], p.buyQty);
     if (!evs.length) return;                       // 购入全被退货抵销：不参与小结统计
-    /* 用药周期（2026-09-30 口径 v3）：人工自定义周期（cycleCustom）整体沿用人工值；
-       未自定义则每笔购药事件的应回购日 = 该笔净盒数 × 单盒天数（与明细表 nextMs 口径一致）。
+    /* 用药周期（2026-09-30 口径 v3.1）：人工自定义周期（cycleCustom）整体沿用人工值；
+       未自定义时——非末笔事件按 该笔净盒数 × 每盒天数；**末笔事件按 末次月合计盒数（p.lastQty）× 每盒天数**，
+       与 engine 理论下次购药（nextMs = 末次 + 每盒天数 × lastQty）完全一致。
        注意 engine 的 cycleDays 未自定义时=品种默认值（恒 > 0），不能用它判断是否自定义。
-       修复：v2 对每笔只加 1 个周期，买 2 盒的患者被提前判定应回购（如 8-31 买 2 盒被算成 9-28 应回购） */
-    function evDays(q){ return (p.cycleCustom && p.cycleDays > 0) ? p.cycleDays : sumDaysVal() * (q > 0 ? q : 1); }
+       v3 教训：只按每笔盒数算，月中分两笔买的患者（如 8-03 买1 + 8-31 买1）末笔会被算成 9-28 应回购，
+       而明细表口径是 8-31 + 2×28 = 10-26 */
+    function evDays(q, isLast){ return (p.cycleCustom && p.cycleDays > 0) ? p.cycleDays : sumDaysVal() * (isLast && p.lastQty > 0 ? p.lastQty : (q > 0 ? q : 1)); }
     var hit = false, hb = false, hitMs = null, jHit = -1;
     var inP = false, firstInP = null, lastInP = null, jL = -1, inQty = 0;   // 本期购药（周期内有购药事件）+ 周期内盒数
     for (var j = 0; j < evs.length; j++){
-      var d2 = evs[j].ms + evDays(evs[j].qty) * 86400000;   // 该次购药事件的应回购日（按该次盒数）
+      var d2 = evs[j].ms + evDays(evs[j].qty, j === evs.length - 1) * 86400000;   // 该次购药事件的应回购日（末笔按末次月合计盒数）
       if (d2 >= ws && d2 < we){
         hit = true;
         if (hitMs == null){ hitMs = d2; jHit = j; }
@@ -1997,7 +1999,7 @@ function renderSummary(){
         dev: Math.round((evs[jHit + 1].ms - hitMs) / 86400000) });
     }
     if (inP && evs[0].ms < ws && !hit && jL > 0){
-      var prevDue = evs[jL - 1].ms + evDays(evs[jL - 1].qty) * 86400000;   // 上一次购药事件对应的应回购日（按该次盒数）
+      var prevDue = evs[jL - 1].ms + evDays(evs[jL - 1].qty, jL - 1 === evs.length - 1) * 86400000;   // 上一次购药事件对应的应回购日
       detail.buyNoDue.push({ p: p, refMs: lastInP, dueMs: prevDue,
         dev: Math.round((lastInP - prevDue) / 86400000) });
     }
