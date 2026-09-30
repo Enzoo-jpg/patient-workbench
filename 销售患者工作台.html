@@ -10,8 +10,8 @@
     --ink:#494953; --ink2:#71737E; --ink3:#9EA1AB;
     --violet:#6a7efc; --violet-l:#EDF0FE;
     --blue:#8FA0FD; --blue-l:#EEF1FE;
-    --green:#6a7efc; --green-l:#EDF0FE;
-    --amber:#FFB20F; --amber-l:#FDEAE2;
+    --green:#008000; --green-l:#E6F2E6;
+    --amber:#FCA311; --amber-l:#FDEAE2;
     --rose:#ff5656; --rose-l:#FFECEC;
     --r:10px; --sd:0 1px 3px rgba(73,73,83,.08);
   }
@@ -84,7 +84,7 @@
   .qrow:first-child{border-top:none}
   .tag{flex:none;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
   .tag.ok{background:var(--green-l);color:var(--green)}
-  .tag.warn{background:var(--amber-l);color:#FFB20F}
+  .tag.warn{background:var(--amber-l);color:#FCA311}
   .tag.err{background:var(--rose-l);color:#E54545}
   .tag.info{background:var(--blue-l);color:var(--blue)}
   .qrow .txt{flex:1;color:var(--ink2)}
@@ -128,12 +128,12 @@
   .sumCycle{display:inline-flex;gap:4px}
   .sumBtn{font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--line);
     background:var(--card);color:var(--ink2);cursor:pointer}
-  .sumBtn.on{background:#FFB20F;border-color:#FFB20F;color:#fff}
+  .sumBtn.on{background:#FCA311;border-color:#FCA311;color:#fff}
   .sumRange{font-size:12.5px;color:var(--ink2)}
   .sumDaysLab{font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:4px}
-  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:#FFB20F;font-weight:700;
+  .sumDaysLab input{width:54px;font:inherit;font-size:12.5px;color:#FCA311;font-weight:700;
     border:1px solid var(--line);border-radius:6px;padding:2px 4px;text-align:center;background:#fff}
-  .sumDaysLab input:focus{outline:none;border-color:#FFB20F}
+  .sumDaysLab input:focus{outline:none;border-color:#FCA311}
   /* 区间日历（2026-09-20 首版，2026-09-23 抽成通用组件）：一个日历面板选起止日期 */
   .calAnchor{position:relative}
   .calPanel{position:absolute;top:calc(100% + 6px);left:0;z-index:60;background:var(--card);
@@ -141,7 +141,7 @@
     padding:10px;width:252px;user-select:none}
   .calHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
   .calHead b{font-size:13px;color:var(--ink)}
-  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:#FFB20F;
+  .calNav{border:none;background:none;font-size:15px;cursor:pointer;color:#FCA311;
     padding:2px 9px;border-radius:8px;line-height:1.2}
   .calNav:hover{background:#FFF3D9}
   .calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
@@ -149,28 +149,28 @@
   .calD{font-size:12px;padding:4px 0;border-radius:8px;cursor:pointer;color:var(--ink)}
   .calD:hover{background:#FFF3D9}
   .calD.inR{background:#FFF3D9}
-  .calD.ep{background:#FFB20F;color:#fff;font-weight:700}
+  .calD.ep{background:#FCA311;color:#fff;font-weight:700}
   .calHint{font-size:11px;color:var(--ink3);margin-top:6px;text-align:center}
   .calFoot{display:flex;justify-content:flex-end;margin-top:2px}
   .calClear{border:none;background:none;cursor:pointer;font-size:11.5px;color:var(--rose);
     padding:2px 8px;border-radius:8px}
   .calClear:hover{background:var(--rose-l)}
-  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid #FFB20F;
-    background:#FFF3D9;color:#FFB20F;cursor:pointer}
-  .sumCopy:hover{background:#FFB20F;color:#fff}
+  .sumCopy{font-size:12px;padding:4px 12px;border-radius:7px;border:1px solid #FCA311;
+    background:#FFF3D9;color:#FCA311;cursor:pointer}
+  .sumCopy:hover{background:#FCA311;color:#fff}
   .sumBody{background:#F7F9FC;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
     font-size:13px;color:var(--ink);line-height:2}
-  .sumBody .sn{font-weight:700;color:#FFB20F;margin-right:6px}
-  .snum{color:#FFB20F;font-weight:700;cursor:pointer;border-bottom:1px dashed #FFB20F;padding:0 2px}
+  .sumBody .sn{font-weight:700;color:#FCA311;margin-right:6px}
+  .snum{color:#FCA311;font-weight:700;cursor:pointer;border-bottom:1px dashed #FCA311;padding:0 2px}
   .snum:hover{background:#FFF3D9}
-  .snum input{width:64px;font:inherit;font-weight:700;color:#FFB20F;border:1px solid #FFB20F;
+  .snum input{width:64px;font:inherit;font-weight:700;color:#FCA311;border:1px solid #FCA311;
     border-radius:5px;padding:0 4px;text-align:center}
   .snum input:focus{outline:none;background:#fff}
   .sumTip{font-size:12px;color:var(--ink3);margin-top:6px}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
   .st{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:600}
-  .st-在治{background:var(--green-l);color:#4F63D0}
-  .st-断药预警{background:var(--amber-l);color:#FFB20F}
+  .st-在治{background:var(--green-l);color:#008000}
+  .st-断药预警{background:var(--amber-l);color:#FCA311}
   .st-脱落{background:var(--rose-l);color:#E54545}
   td.overdue{color:#E54545;font-weight:600}
   .edit{background:#F7F9FE;border:1px solid #D9E0FC;border-radius:6px;padding:2px 6px;
@@ -3239,7 +3239,7 @@ function buildSnapShareHtml(pool, manual, pid, name, mask, store){
     '.kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}\n' +
     '.kc{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px;box-shadow:0 2px 8px rgba(106,126,252,.08)}\n' +
     '.kc b{display:block;font-size:20px;line-height:1.3}.kc span{font-size:12px;color:var(--ink2)}\n' +
-    '.kc.g b{color:#4F63D0}.kc.y b{color:#FFB20F}.kc.r b{color:#E54545}\n' +
+    '.kc.g b{color:#008000}.kc.y b{color:#FCA311}.kc.r b{color:#E54545}\n' +
     '.kc.click{cursor:pointer;user-select:none;transition:box-shadow .15s,border-color .15s}.kc.click:hover{box-shadow:0 3px 12px rgba(106,126,252,.2)}\n' +
     '.kc.on{border-color:#6a7efc;background:#EDF0FE}\n' +
     '.span{color:var(--ink2);font-size:12.5px;margin-bottom:14px}.span b{color:var(--ink)}\n' +
@@ -3251,7 +3251,7 @@ function buildSnapShareHtml(pool, manual, pid, name, mask, store){
     'th{position:sticky;top:0;background:#E9EEF4;text-align:left;padding:8px 10px;font-weight:600;border-bottom:1px solid var(--line)}\n' +
     'td{padding:7px 10px;border-bottom:1px solid #E9EDF3}tr:last-child td{border-bottom:none}\n' +
     '.b{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px}\n' +
-    '.s0{background:#EDF0FE;color:#4F63D0}.s1{background:#FDEAE2;color:#FFB20F}.s2{background:#FFECEC;color:#E54545}\n' +
+    '.s0{background:#E6F2E6;color:#008000}.s1{background:#FDEAE2;color:#FCA311}.s2{background:#FFECEC;color:#E54545}\n' +
     '.note{white-space:normal;min-width:150px;max-width:280px}\n' +
     '.empty{padding:24px;text-align:center;color:var(--ink2)}\n' +
     '</style>\n</head>\n<body><div class="wrap">\n' +
@@ -3606,7 +3606,7 @@ function openSumDrill(kind, sk){
       var tip = kind === 'dueNoBuy'
         ? '应回购 ' + E.fmtDate(x.refMs) + ' · 实际购药 ' + E.fmtDate(x.actMs)
         : '应回购 ' + E.fmtDate(x.dueMs) + ' · 实际购药 ' + E.fmtDate(x.refMs);
-      var devCol = x.dev < 0 ? '#4F63D0' : x.dev > 0 ? '#E54545' : 'inherit';
+      var devCol = x.dev < 0 ? '#008000' : x.dev > 0 ? '#E54545' : 'inherit';
       devCell = '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3" title="' + tip + '">' +
         '<span style="color:' + devCol + ';font-weight:500">' + devTxt(x.dev) + '</span></td>';
     }
@@ -3794,7 +3794,7 @@ var NOTICE = {
   sum: '修复小结应回购日未按购药盒数推算、整体小结配色调整、预警色换金黄',
   items: [
     '🛠️ <b>修复整体小结「应回购」误判</b>：应回购日现在按「该次购药盒数 × 每盒天数」推算（与明细表「预计下次购药日期」同口径）。此前买 2 盒的患者被按 1 盒周期提前判定应回购；本次修复后部分多盒购药患者的 应回购/已回购/未回购/提前·推迟 数字会变化（更准确）',
-    '🎨 <b>配色调整</b>：整体换回四色体系，断药预警改为金黄 <b>#FFB20F</b>，整体小结区数字与日历同步金黄化（其余区域保持主蓝）',
+    '🎨 <b>配色调整</b>：整体换回四色体系，断药预警改为金黄 <b>#FCA311</b>，整体小结区数字与日历同步金黄化（其余区域保持主蓝）',
     '📌 <b>患者明细「姓名」列冻结</b>：横向滚动填写信息时姓名始终贴在最左侧',
     '📋 <b>整体小结「未回购」明细补随访信息</b>：下钻新增 末次随访 / 用药状态 / 减停药原因 / 用药问题反馈 四列，「导出名单」同步'
   ]
