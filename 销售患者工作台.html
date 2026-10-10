@@ -411,6 +411,28 @@
     <div class="sumTip">💡 蓝色数字可直接点击修改（人工修正优先于自动统计，自动保存）</div>
   </div>
 
+  <!-- 博瑞纳脱落与召回专项页（2026-10-10）：入口 = 小结头部按钮，整页切换 + 药房筛选 -->
+  <div class="card" id="rcPage" hidden>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <b class="sumTitle" style="font-size:16px">🧩 博瑞纳 · 脱落与召回专项</b>
+      <span style="font-size:13px;color:var(--ink2)">药房</span>
+      <select id="rcStore" style="padding:3px 8px;font:inherit;border:1px solid var(--line);border-radius:6px;background:#F7F9FE;color:var(--ink);min-width:160px"><option value="">全部药房</option></select>
+      <span id="rcFilterTip" style="font-size:12px;color:var(--ink3)" hidden></span>
+      <span style="flex:1"></span>
+      <button type="button" id="rcBack" class="sumBtn">← 返回工作台</button>
+    </div>
+    <div class="rcAlert">
+      ⚠️ <b>博瑞纳专用口径提醒（与其他品种不同，请勿混淆）</b>：博瑞纳的「脱落」= 连续未购药满
+      <b>2 个月且不超过 6 个月</b>；超过 6 个月未购药不属于本专项召回范围；
+      「成功召回」= 脱落后再次购药 <b>1 次及以上</b>。其他品种仍按「过期 30 天即脱落」的原口径计算。
+    </div>
+    <div style="margin:10px 0 2px;font-size:13px;color:var(--ink2)">当前脱落可召回
+      <b id="rcDueN" style="color:#E54545;font-size:16px">0</b> 人　·　历史成功召回
+      <b id="rcOkN" style="color:#008000;font-size:16px">0</b> 人</div>
+    <div id="rcDueWrap"></div>
+    <div id="rcOkWrap" style="margin-top:12px"></div>
+  </div>
+
   <div class="dist" id="dist"></div>
 
   <!-- 小结下钻：人数 → 患者明细（2026-09-18） -->
@@ -443,28 +465,6 @@
     </div>
   </div>
 
-  <!-- 博瑞纳脱落与召回专项弹窗（2026-10-09）：入口 = 整体小结头部「🧩 脱落召回专项」按钮（仅博瑞纳品种显示） -->
-  <div class="ovl" id="rcOvl" hidden>
-    <div class="mcard" style="max-width:960px">
-      <h3>博瑞纳 · 脱落与召回专项</h3>
-      <div class="rcAlert">
-        ⚠️ <b>博瑞纳专用口径提醒（与其他品种不同，请勿混淆）</b>：博瑞纳的「脱落」= 连续未购药满
-        <b>2 个月且不超过 6 个月</b>；超过 6 个月未购药不属于本专项召回范围；
-        「成功召回」= 脱落后再次购药 <b>1 次及以上</b>。其他品种仍按「过期 30 天即脱落」的原口径计算。
-      </div>
-      <div style="margin:10px 0 2px;font-size:13px;color:var(--ink2)">当前脱落可召回
-        <b id="rcDueN" style="color:#E54545;font-size:16px">0</b> 人　·　历史成功召回
-        <b id="rcOkN" style="color:#008000;font-size:16px">0</b> 人</div>
-      <div style="max-height:56vh;overflow:auto">
-        <div id="rcDueWrap"></div>
-        <div id="rcOkWrap" style="margin-top:12px"></div>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px">
-        <button type="button" id="rcClose" style="font-size:12px;padding:4px 12px">关闭</button>
-      </div>
-    </div>
-  </div>
-
   <!-- 快照分享：选择品种/药房/是否脱敏后导出单文件只读 HTML（2026-09-24） -->
   <div class="ovl" id="snapOvl" hidden>
     <div class="mcard" style="max-width:460px">
@@ -492,7 +492,7 @@
     <div class="qbody" id="qbody"></div>
   </details>
 
-  <div class="card">
+  <div class="card" id="tblCard">
     <div class="tbar">
       <input type="text" id="q" placeholder="搜索姓名 / 电话 / 医生 / 医院（脱敏开启时可用打码搜索）">
       <select id="fStatus"><option value="">全部状态</option>
@@ -1921,19 +1921,57 @@ function rcTbl(cols, rows, emptyTip){
 }
 function renderRecall(){
   var btn = $('#btnRcEntry'); if (!btn) return;
-  btn.hidden = !(ST.pid === 'boruina' && ST.pool.length);
-  if (!$('#rcOvl').hidden) fillRcModal();          // 弹窗开着时随导入/脱敏实时刷新
+  var avail = (ST.pid === 'boruina' && ST.pool.length > 0);
+  btn.hidden = !avail;
+  /* 专项页开着时：每次重渲染（导入/脱敏/重算）都重新套用隐藏并刷新数据 */
+  if (ST.rcPageOn){
+    if (!avail){ closeRcPage(); return; }
+    rcApply(true);
+    fillRcPage();
+  }
 }
-function openRcModal(){
+/* 专项页 = 整页切换视图：盖住工作台主界面（KPI/小结/明细等），返回时恢复 */
+var RC_MAIN = ['#poolBar', '#dStoreBar', '#kpis', '#sumCard', '#rcPage', '#dist', '#quality', '#tblCard'];
+function rcApply(on){
+  RC_MAIN.forEach(function(s){
+    var el = $(s); if (el && s !== '#rcPage') el.hidden = on;
+  });
+  $('#rcPage').hidden = !on;
+}
+function openRcPage(){
   if (ST.pid !== 'boruina') return;
-  fillRcModal();
-  $('#rcOvl').hidden = false;
+  ST.rcPageOn = true;
+  rcApply(true);
+  fillRcStoreSel();
+  fillRcPage();
+  window.scrollTo(0, 0);
 }
-function fillRcModal(){
+function closeRcPage(){
+  ST.rcPageOn = false;
+  rcApply(false);
+  render();          // 重新渲染以恢复 KPI/小结/明细等卡片各自的正确显隐（render 末尾 renderRecall 不再动作）
+}
+function fillRcStoreSel(){
+  var sel = $('#rcStore'); if (!sel) return;
+  var cur = ST.rcStore || '';
+  var stores = {};
+  (ST.result.patients || []).forEach(function(p){ if (p.store) stores[p.store] = 1; });
+  var keys = Object.keys(stores).sort();
+  if (cur && keys.indexOf(cur) < 0){ cur = ''; ST.rcStore = ''; }   // 原筛选药房在当前数据里已不存在 → 重置
+  sel.innerHTML = '<option value="">全部药房</option>' + keys.map(function(s){
+    return '<option value="' + esc(s) + '"' + (s === cur ? ' selected' : '') + '>' + esc(s) + '</option>';
+  }).join('');
+}
+function fillRcPage(){
   var mask = $('#mask').checked;
+  var store = ST.rcStore || '';
+  var tip = $('#rcFilterTip');
+  if (tip){ tip.hidden = !store; tip.textContent = store ? '已按药房「' + store + '」筛选' : ''; }
   var now = Date.now();
   var due = [], ok = [];
   (ST.result.patients || []).forEach(function(p){
+    if (store && p.store !== store) return;       // 药房筛选
+    var evs = netEvents(p.buyMs || [], p.buyQty);
     var evs = netEvents(p.buyMs || [], p.buyQty);
     if (!evs.length) return;                       // 购入全被退货抵销：不参与
     var last = evs[evs.length - 1];
@@ -1995,9 +2033,9 @@ function fillRcModal(){
     rcTbl(['姓名','电话','脱落前末次购药','脱落未购','召回首笔购药','召回后购药(次/盒)','末次购药','当前状态'], okRows,
       '暂无成功召回记录（历史上没有「脱落后再次购药」的患者）。');
 }
-$('#btnRcEntry').onclick = openRcModal;
-$('#rcClose').onclick = function(){ $('#rcOvl').hidden = true; };
-$('#rcOvl').addEventListener('click', function(ev){ if (ev.target === this) this.hidden = true; });
+$('#btnRcEntry').onclick = openRcPage;
+$('#rcBack').onclick = closeRcPage;
+$('#rcStore').onchange = function(){ ST.rcStore = this.value; fillRcPage(); };
 function kpi(cls, lb, vl, ex, drill, active, tip){
   var cl = cls + (drill ? ' kpi-click' : '') + (active ? ' kpi-active' : '');
   var tp = tip ? ' data-tip="' + tip + '"' : '';
@@ -3475,7 +3513,7 @@ function clearRowSel(){
 $('#btnClearSel').onclick = clearRowSel;
 document.addEventListener('keydown', function(ev){
   if (ev.key === 'Escape' && !$('#snapOvl').hidden){ $('#snapOvl').hidden = true; return; }   // 分享弹窗：Esc 直接关闭
-  if (ev.key === 'Escape' && !$('#rcOvl').hidden){ $('#rcOvl').hidden = true; return; }   // 脱落召回专项：Esc 直接关闭
+  if (ev.key === 'Escape' && !$('#rcPage').hidden){ closeRcPage(); return; }   // 脱落召回专项页：Esc 返回工作台
   if (ev.key === 'Escape' && !$('#patOvl').hidden){ $('#patOvl').hidden = true; ST.patOpenKey = null; return; }   // 购药档案弹窗：Esc 直接关闭
   if (ev.key === 'Escape' && !$('#sumOvl').hidden) return;   // 弹窗打开时 Esc 归弹窗管
   if (ev.key === 'Escape'){
