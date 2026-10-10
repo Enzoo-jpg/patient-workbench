@@ -108,6 +108,11 @@
   td.nm{position:sticky;left:0;background:var(--card);z-index:1;border-right:1px solid var(--line)}
   tbody tr:hover td.nm{background:var(--violet-l)}
   tbody tr.row-sel td.nm{background:#E3E9FE;box-shadow:inset 3px 0 0 var(--violet)}
+  /* 博瑞纳脱落召回专项（2026-10-09）：醒目提醒条 */
+  .rcAlert{background:#FFF6D6;border:1.5px solid #FCA311;border-radius:8px;padding:9px 12px;
+    font-size:13px;line-height:1.7;color:#6B4E00}
+  .rcAlert b{color:#A36B00}
+  .rcTblTitle{font-size:13.5px;font-weight:700;margin:6px 0 4px;color:var(--ink)}
   /* 患者购药档案（2026-09-30）：点击姓名查看底表全部购药记录 */
   .plink{color:var(--violet);cursor:pointer;font-weight:600}
   .plink:hover{text-decoration:underline}
@@ -397,6 +402,9 @@
         <div id="calPanel" class="calPanel" hidden></div>
       </span>
       <span class="grow"></span>
+      <button type="button" id="btnRcEntry" class="sumBtn" hidden
+        style="border-color:#FCA311;color:#A36B00;font-weight:600"
+        title="博瑞纳专用口径：脱落 = 连续未购药 2~6 个月；成功召回 = 脱落后再次购药 ≥1 次。点击查看专项明细">🧩 脱落召回专项</button>
       <button type="button" id="btnCopySum" class="sumCopy" title="复制小结文字，可直接粘贴到微信/群">复制小结</button>
     </div>
     <div class="sumBody" id="sumBody"></div>
@@ -431,6 +439,28 @@
       <div id="patList" style="max-height:56vh;overflow:auto"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
         <button type="button" id="patClose" style="font-size:12px;padding:4px 12px">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 博瑞纳脱落与召回专项弹窗（2026-10-09）：入口 = 整体小结头部「🧩 脱落召回专项」按钮（仅博瑞纳品种显示） -->
+  <div class="ovl" id="rcOvl" hidden>
+    <div class="mcard" style="max-width:960px">
+      <h3>博瑞纳 · 脱落与召回专项</h3>
+      <div class="rcAlert">
+        ⚠️ <b>博瑞纳专用口径提醒（与其他品种不同，请勿混淆）</b>：博瑞纳的「脱落」= 连续未购药满
+        <b>2 个月且不超过 6 个月</b>；超过 6 个月未购药不属于本专项召回范围；
+        「成功召回」= 脱落后再次购药 <b>1 次及以上</b>。其他品种仍按「过期 30 天即脱落」的原口径计算。
+      </div>
+      <div style="margin:10px 0 2px;font-size:13px;color:var(--ink2)">当前脱落可召回
+        <b id="rcDueN" style="color:#E54545;font-size:16px">0</b> 人　·　历史成功召回
+        <b id="rcOkN" style="color:#008000;font-size:16px">0</b> 人</div>
+      <div style="max-height:56vh;overflow:auto">
+        <div id="rcDueWrap"></div>
+        <div id="rcOkWrap" style="margin-top:12px"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button type="button" id="rcClose" style="font-size:12px;padding:4px 12px">关闭</button>
       </div>
     </div>
   </div>
@@ -1866,7 +1896,108 @@ function render(){
   renderQuality();
   renderTable();
   renderSummary();
+  renderRecall();
 }
+
+/* ---------- 博瑞纳脱落与召回专项（2026-10-09）----------
+   博瑞纳专用口径（与其他品种不同）：
+   · 脱落 = 连续未购药 2 个月 ≤ 未购 ≤ 6 个月（完整自然月，rcMonthFloor 向下取整）；
+     超过 6 个月不在本专项召回范围内
+   · 成功召回 = 脱落后（相邻购药事件间隔 2~6 个月）再次购药 ≥ 1 次
+   仅在博瑞纳品种池显示；数据全部来自当前底表，随导入实时重算 */
+function rcMonthFloor(fromMs, toMs){
+  var a = new Date(fromMs), b = new Date(toMs);
+  var m = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  if (b.getDate() < a.getDate()) m--;
+  return m < 0 ? 0 : m;
+}
+function rcCell(t){ return '<td style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + t + '</td>'; }
+function rcTbl(cols, rows, emptyTip){
+  var head = '<table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr>' +
+    cols.map(function(h){ return '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)">' + h + '</th>'; }).join('') +
+    '</tr></thead><tbody>';
+  return head + (rows.length ? rows.join('') :
+    '<tr><td colspan="' + cols.length + '" style="padding:10px;color:var(--ink2)">' + emptyTip + '</td></tr>') + '</tbody></table>';
+}
+function renderRecall(){
+  var btn = $('#btnRcEntry'); if (!btn) return;
+  btn.hidden = !(ST.pid === 'boruina' && ST.pool.length);
+  if (!$('#rcOvl').hidden) fillRcModal();          // 弹窗开着时随导入/脱敏实时刷新
+}
+function openRcModal(){
+  if (ST.pid !== 'boruina') return;
+  fillRcModal();
+  $('#rcOvl').hidden = false;
+}
+function fillRcModal(){
+  var mask = $('#mask').checked;
+  var now = Date.now();
+  var due = [], ok = [];
+  (ST.result.patients || []).forEach(function(p){
+    var evs = netEvents(p.buyMs || [], p.buyQty);
+    if (!evs.length) return;                       // 购入全被退货抵销：不参与
+    var last = evs[evs.length - 1];
+    var mLast = rcMonthFloor(last.ms, now);
+    /* ① 脱落可召回：当前连续未购 2~6 个月 */
+    if (mLast >= 2 && mLast <= 6){
+      due.push({ p: p, lastMs: last.ms, months: mLast, days: Math.floor((now - last.ms) / 86400000) });
+    }
+    /* ② 成功召回：历史相邻事件间隔 2~6 个月后再次购药（取最近一次召回） */
+    var ep = null;
+    for (var j = 1; j < evs.length; j++){
+      var g = rcMonthFloor(evs[j - 1].ms, evs[j].ms);
+      if (g >= 2 && g <= 6) ep = { dropMs: evs[j - 1].ms, backMs: evs[j].ms, months: g, idx: j };
+    }
+    if (ep){
+      var after = evs.slice(ep.idx);               // 召回首笔及之后全部购药
+      ok.push({ p: p, dropMs: ep.dropMs, backMs: ep.backMs, months: ep.months,
+        cnt: after.length, qty: after.reduce(function(s, e){ return s + (e.qty || 0); }, 0) });
+    }
+  });
+  due.sort(function(a, b){ return a.lastMs - b.lastMs; });   // 最久未购在前
+  ok.sort(function(a, b){ return b.backMs - a.backMs; });    // 最近召回在前
+  ST.recallDetail = { due: due, ok: ok };
+  $('#rcDueN').textContent = due.length;
+  $('#rcOkN').textContent = ok.length;  function stBadge(p){
+    var s = effStatus(p);
+    var cls = s === '在治' ? '.st-在治' : (s === '断药预警' ? '.st-断药预警' : '.st-脱落');
+    return '<span class="' + cls.slice(1) + '">' + s + '</span>';
+  }
+  var dueRows = due.map(function(x){
+    var p = x.p;
+    return '<tr>' +
+      rcCell(mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) +
+      '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (mask ? maskPhone(p.phone) : (p.phone || '')) + '</td>' +
+      rcCell(E.fmtDate(x.lastMs)) +
+      rcCell('<b style="color:#E54545">' + x.months + ' 个月</b>（' + x.days + ' 天）') +
+      rcCell(p.lastQty + ' 盒') +
+      rcCell(p.totalQty + ' 盒') +
+      rcCell(esc(p.store || '')) + rcCell(esc(p.hospital || '')) +
+      rcCell(esc(p.doctor ? (mask ? maskName(p.doctor) : p.doctor) : '')) +
+      rcCell(stBadge(p)) + '</tr>';
+  });
+  $('#rcDueWrap').innerHTML = '<div class="rcTblTitle">📌 脱落可召回患者明细（' + due.length + ' 人，按未购时长从久到近）</div>' +
+    rcTbl(['姓名','电话','末次购药','未购药时长','末次购药','累计购药','药房','医院','医生','当前状态'], dueRows,
+      '当前没有处于脱落窗口（2~6 个月未购）的患者。');
+  var okRows = ok.map(function(x){
+    var p = x.p;
+    return '<tr>' +
+      rcCell(mask ? maskName(p.name) : (p.name || (p.orderNo ? '订单 ' + p.orderNo : ''))) +
+      '<td class="mono" style="padding:4px 8px;border-bottom:1px solid #E9EDF3">' + (mask ? maskPhone(p.phone) : (p.phone || '')) + '</td>' +
+      rcCell(E.fmtDate(x.dropMs)) +
+      rcCell(x.months + ' 个月') +
+      rcCell('<b style="color:#008000">' + E.fmtDate(x.backMs) + '</b>') +
+      rcCell(x.cnt + ' 次 / ' + x.qty + ' 盒') +
+      rcCell(E.fmtDate(p.lastBuyMs)) +
+      rcCell(stBadge(p)) + '</tr>';
+  });
+  $('#rcOkWrap').innerHTML = '<div class="rcTblTitle">✅ 成功召回患者明细（' + ok.length + ' 人，按召回时间从近到远）</div>' +
+    rcTbl(['姓名','电话','脱落前末次购药','脱落未购','召回首笔购药','召回后购药(次/盒)','末次购药','当前状态'], okRows,
+      '暂无成功召回记录（历史上没有「脱落后再次购药」的患者）。');
+}
+$('#btnRcEntry').onclick = openRcModal;
+$('#rcClose').onclick = function(){ $('#rcOvl').hidden = true; };
+$('#rcOvl').addEventListener('click', function(ev){ if (ev.target === this) this.hidden = true; });
 function kpi(cls, lb, vl, ex, drill, active, tip){
   var cl = cls + (drill ? ' kpi-click' : '') + (active ? ' kpi-active' : '');
   var tp = tip ? ' data-tip="' + tip + '"' : '';
@@ -3054,7 +3185,7 @@ $('#fuFile').onchange = function(){
   this.value = '';                                   // 允许重复选同一个文件
 };
 
-$('#mask').onchange = renderTable;
+$('#mask').onchange = function(){ renderTable(); renderRecall(); };
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
 ['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNoteFrom','#fNoteTo','#fFuFrom','#fFuTo'].forEach(function(s){ $(s).onchange = renderTable; });
@@ -3344,6 +3475,7 @@ function clearRowSel(){
 $('#btnClearSel').onclick = clearRowSel;
 document.addEventListener('keydown', function(ev){
   if (ev.key === 'Escape' && !$('#snapOvl').hidden){ $('#snapOvl').hidden = true; return; }   // 分享弹窗：Esc 直接关闭
+  if (ev.key === 'Escape' && !$('#rcOvl').hidden){ $('#rcOvl').hidden = true; return; }   // 脱落召回专项：Esc 直接关闭
   if (ev.key === 'Escape' && !$('#patOvl').hidden){ $('#patOvl').hidden = true; ST.patOpenKey = null; return; }   // 购药档案弹窗：Esc 直接关闭
   if (ev.key === 'Escape' && !$('#sumOvl').hidden) return;   // 弹窗打开时 Esc 归弹窗管
   if (ev.key === 'Escape'){
@@ -3871,15 +4003,11 @@ renderColSet();
 
 /* ---------- 更新公告（换版本号即重新弹出；✕ 后本版本不再提示） ---------- */
 var NOTICE = {
-  ver: 'v20260930',
-  date: '2026-09-30',
-  sum: '修复小结应回购日未按购药盒数推算、整体小结配色调整、预警色换金黄',
+  ver: 'v20261009',
+  date: '2026-10-09',
+  sum: '新增博瑞纳「脱落与召回」专项：专用口径 + 可召回/成功召回两份明细',
   items: [
-    '🛠️ <b>修复整体小结「应回购」误判</b>：应回购日现在按「该次购药盒数 × 每盒天数」推算（与明细表「预计下次购药日期」同口径）。此前买 2 盒的患者被按 1 盒周期提前判定应回购；本次修复后部分多盒购药患者的 应回购/已回购/未回购/提前·推迟 数字会变化（更准确）',
-    '🎨 <b>配色调整</b>：整体换回四色体系，断药预警改为金黄 <b>#FCA311</b>，整体小结区数字与日历同步金黄化（其余区域保持主蓝）',
-    '📌 <b>患者明细「姓名」列冻结</b>：横向滚动填写信息时姓名始终贴在最左侧',
-    '📋 <b>整体小结「未回购」明细补随访信息</b>：下钻新增 末次随访 / 用药状态 / 减停药原因 / 用药问题反馈 四列，「导出名单」同步',
-    '🗂️ <b>患者购药档案</b>：明细表里<b>点击患者姓名</b>，弹窗查看该患者在底表里的全部购药行为——日期/盒数（退货红字标注）/距上次间隔/是否按期（提前·逾期天数）/药房/医院/医生/支付方式/适应症，换药房、换医生一目了然'
+    '🧩 <b>博瑞纳脱落与召回专项</b>：博瑞纳品种下，整体小结头部出现「🧩 脱落召回专项」入口按钮，点击弹出专项弹窗。<b>注意：博瑞纳的「脱落」口径与其他品种不同</b>——连续未购药满 2 个月且不超过 6 个月才算脱落（其他品种是过期 30 天即脱落），超过 6 个月不在召回范围。弹窗含两份明细：①当前脱落可召回名单（含未购药时长，便于跟进）②成功召回名单（脱落后再次购药 ≥1 次，含召回时间与召回后购药情况）。数据随底表导入实时重算，脱敏开关全程生效'
   ]
 };
 (function(){
