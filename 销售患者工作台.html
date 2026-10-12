@@ -265,7 +265,11 @@
 .ssel-btn{display:inline-flex;align-items:center;gap:6px;font:inherit;color:var(--ink);
   background:var(--card);border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer}
 .ssel-btn:hover{border-color:var(--violet)}
-.ssel-btn .ar{font-size:10px;color:var(--ink2)}
+.ssel-btn .ar{font-size:10px;color:var(--ink2);flex:none}
+.ssel-btn .tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}  /* 长药房名省略，防撑破布局 */
+/* 快照弹窗里的可搜索下拉跟随弹窗布局（原 select 的 flex:1 转移到包装层） */
+#snapOvl .ssel{flex:1}
+#snapOvl .ssel-btn{width:100%;box-sizing:border-box}
 .ssel-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:55;width:230px;
   background:var(--card);border:1px solid var(--line);border-radius:9px;padding:6px;
   box-shadow:0 8px 24px rgba(73,73,83,.14)}
@@ -1940,6 +1944,7 @@ function fillRcStoreSel(){
   sel.innerHTML = '<option value="">全部药房</option>' + keys.map(function(s){
     return '<option value="' + esc(s) + '"' + (s === cur ? ' selected' : '') + '>' + esc(s) + '</option>';
   }).join('');
+  syncSsel(sel);   // 可搜索下拉按钮文字随选项重建同步
 }
 function fillRcPage(){
   var mask = $('#mask').checked;
@@ -2960,6 +2965,7 @@ function updateDStoreInfo(){
     $('#dStoreClear').hidden = false;
   } else {
     $('#dStore').value = '';
+    syncSsel($('#dStore'));            // 可搜索下拉按钮文字同步
     $('#dStoreCount').textContent = '影响看板 KPI/分布 与 明细表 全部口径';
     $('#dStoreClear').hidden = true;
   }
@@ -2995,7 +3001,7 @@ function enhanceSelSearchable(sel){
 
   function syncBtn(){
     var o = sel.options[sel.selectedIndex];
-    btn.innerHTML = esc(o && o.text ? o.text : '全部') + ' <span class="ar">▾</span>';
+    btn.innerHTML = '<span class="tx">' + esc(o && o.text ? o.text : '全部') + '</span> <span class="ar">▾</span>';
   }
   function renderList(){
     var kw = inp.value.trim().toLowerCase();
@@ -3034,8 +3040,9 @@ function enhanceSelSearchable(sel){
   syncBtn();
 }
 function syncSsel(sel){ if (sel && sel.__syncSsel) sel.__syncSsel(); }
-function syncAllSsel(){ ['#prodSel','#fStore','#fHosp'].forEach(function(s){ syncSsel($(s)); }); }
-['#prodSel','#fStore','#fHosp'].forEach(function(s){ enhanceSelSearchable($(s)); });
+function syncAllSsel(){ ['#prodSel','#fStore','#fHosp','#dStore','#rcStore','#shareStore'].forEach(function(s){ syncSsel($(s)); }); }
+/* 可搜索下拉覆盖全部筛选类控件：品种/明细表药房+医院/看板药房/博瑞纳专项药房/快照分享药房（2026-10-12） */
+['#prodSel','#fStore','#fHosp','#dStore','#rcStore','#shareStore'].forEach(function(s){ enhanceSelSearchable($(s)); });
 
 function handleFile(file){
   var fr = new FileReader();
@@ -3257,6 +3264,7 @@ $('#dStore').onchange = function(){
 };
 $('#fStore').onchange = function(){
   $('#dStore').value = this.value;     // 反向同步，保证两处显示一致
+  syncSsel($('#dStore'));              // 可搜索下拉按钮文字同步
   render();
 };
 $('#dStoreClear').onclick = function(){
@@ -3317,6 +3325,7 @@ function shareFillStores(){
   var stores = shareStoresFor($('#sharePid').value);
   $('#shareStore').innerHTML = '<option value="">全部药房</option>' +
     stores.map(function(s){ return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join('');
+  syncSsel($('#shareStore'));   // 可搜索下拉按钮文字随选项重建同步
 }
 function openShareDialog(){
   var sel = $('#sharePid');
