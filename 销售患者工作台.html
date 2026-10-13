@@ -116,15 +116,17 @@
   /* 患者购药档案（2026-09-30）：点击姓名查看底表全部购药记录 */
   .plink{color:var(--violet);cursor:pointer;font-weight:600}
   .plink:hover{text-decoration:underline}
-  /* 列设置下拉 */
-  .colset{position:relative}
-  .colset summary{list-style:none;cursor:pointer;user-select:none}
-  .colset summary::-webkit-details-marker{display:none}
-  .colset[open] summary{background:var(--violet-l)}
-  #colSetBox{position:absolute;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--line);
-    border-radius:var(--r);box-shadow:var(--sd);padding:8px 10px;z-index:40;min-width:170px;max-height:300px;overflow:auto}
-  #colSetBox label{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:12.5px;cursor:pointer;white-space:nowrap}
-  #colSetBox .cbtn{margin-top:6px;width:100%;text-align:center;font-size:12px;padding:3px 0}
+  /* 明细区工具条：脱敏胶囊切换 + 列显隐 chip 行（参考排版 2026-10-13） */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:#fff}
+  .seg button{border:none;background:transparent;font:inherit;font-size:12.5px;padding:5px 11px;cursor:pointer;color:var(--ink2)}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--violet);color:#fff;font-weight:600}
+  .chiprow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 10px;background:#F7F9FE;border:1px solid var(--line);border-radius:9px}
+  .chiprow[hidden]{display:none}
+  .chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;background:#fff;color:var(--ink2);user-select:none}
+  .chip .tick{font-size:11px}
+  .chip.on{background:var(--violet-l);border-color:#C5CEFB;color:#3D4B9E;font-weight:600}
+  .chip.dis{opacity:.55;cursor:default}
   tbody tr:hover{background:var(--violet-l)}
   /* 选中行：更鲜明的紫底 + 左侧紫条（用户 2026-09-18），点击行切换选中，再点取消 */
   tbody tr.row-sel{background:#E3E9FE;box-shadow:inset 3px 0 0 var(--violet)}
@@ -361,7 +363,6 @@
       <option value="replace">全量替换数据池</option>
       <option value="append">增量追加（自动去重）</option>
     </select>
-    <label class="sw"><input type="checkbox" id="mask"> 姓名/电话/医生脱敏</label>
     <label class="sw"><input type="checkbox" id="noNeg"> 排除退货(负数量)</label>
     <span class="grow"></span>
     <button id="btnBak">导出备份(含数据池)</button>
@@ -533,17 +534,19 @@
         <input type="date" id="fFuTo" hidden>
         <div id="calFu" class="calPanel" hidden></div>
       </label>
+      <span class="seg" id="maskSeg" title="姓名/电话/医生脱敏：明细表、导出 Excel、快照分享全部联动">
+        <button type="button" data-mv="on">脱敏</button><button type="button" data-mv="off" class="on">不脱敏</button>
+      </span>
+      <input type="checkbox" id="mask" hidden>
       <button id="btnUndo" title="撤回最近一次操作（导入/清空/改填写等）">↩ 撤回</button>
       <button id="btnDelSel" hidden style="color:var(--rose);border-color:var(--rose)" title="删除选中的患者及其全部购药记录（本品种）；删除前自动留快照，可用「撤回」恢复">删除选中患者</button>
       <button id="btnClearSel" hidden title="一键取消所有选中（也可按 Esc 键）">取消选择</button>
       <button id="btnTour" title="在真实界面上带你认识每个部分（随时可跳过）">? 新手引导</button>
-      <details id="colSetD" class="colset">
-        <summary title="选择要显示的列">列设置 ▾</summary>
-        <div id="colSetBox"></div>
-      </details>
+      <button id="btnColChips" title="选择要显示的列：点开下方勾选行，点一下即切换该列显隐">列显隐 ▾</button>
       <span class="grow"></span>
       <span class="sub" id="cnt"></span>
     </div>
+    <div class="chiprow" id="colChipRow" hidden></div>
     <div class="tbox">
       <table>
         <thead><tr id="thr"></tr></thead>
@@ -1523,26 +1526,24 @@ function saveCols(){
   try { localStorage.setItem('patient_workbench_cols_v1', JSON.stringify(VIS)); } catch(e){}
 }
 function renderColSet(){
-  var box = $('#colSetBox'); if (!box) return;
-  box.innerHTML = COLS.map(function(c){
-    if (c.k === 'name') return '<label><input type="checkbox" checked disabled> ' + esc(c.t) + '（常驻）</label>';
-    return '<label><input type="checkbox" data-col="' + c.k + '"' + (VIS[c.k] ? ' checked' : '') + '> ' + esc(c.t) + '</label>';
-  }).join('') + '<button class="cbtn" id="colReset">恢复默认（全部显示）</button>';
-  Array.prototype.forEach.call(box.querySelectorAll('input[data-col]'), function(cb){
-    cb.onchange = function(){
-      VIS[cb.getAttribute('data-col')] = cb.checked;
-      saveCols(); renderTable();
+  var box = $('#colChipRow'); if (!box) return;
+  box.innerHTML = '<span style="font-size:12px;color:var(--ink3);flex:none">显示列：</span>' + COLS.map(function(c){
+    if (c.k === 'name') return '<span class="chip on dis" title="患者姓名列常驻显示"><span class="tick">✓</span>' + esc(c.t) + '</span>';
+    return '<span class="chip' + (VIS[c.k] ? ' on' : '') + '" data-col="' + c.k + '" title="点一下切换该列显隐"><span class="tick">' + (VIS[c.k] ? '✓' : '') + '</span>' + esc(c.t) + '</span>';
+  }).join('') + '<button class="cbtn" id="colReset" style="width:auto;padding:3px 10px;margin:0;font-size:12px">恢复默认</button>';
+  Array.prototype.forEach.call(box.querySelectorAll('.chip[data-col]'), function(ch){
+    ch.onclick = function(){
+      var k = ch.getAttribute('data-col');
+      VIS[k] = !VIS[k];
+      saveCols(); renderColSet(); renderTable();
     };
   });
-  $('#colReset').onclick = function(){
+  var rs = $('#colReset');
+  if (rs) rs.onclick = function(){
     COLS.forEach(function(c){ VIS[c.k] = (c.def !== false); });
     saveCols(); renderColSet(); renderTable();
   };
 }
-document.addEventListener('click', function(ev){
-  var d = $('#colSetD');
-  if (d && d.open && !d.contains(ev.target)) d.open = false;
-});
 /* ---------- 人工字段 ---------- */
 function loadManual(){ /* 由 bootstrapPids 统一管理 */ }
 function saveManual(){
@@ -2500,7 +2501,7 @@ function importFollow(file){
     render();
     var msg = '随访数据已按品种自动分拣导入：\n文件：' + file.name + '\n\n' + msgParts.join('\n');
     if (noPoolCnt) msg += '\n\n另有 ' + noPoolCnt + ' 条任务属未建档品种（' + Object.keys(noPoolSample).slice(0, 3).join('、') + '），已跳过';
-    msg += '\n\n随访 4 列（末次随访 / 用药状态 / 减停药原因 / 用药问题）默认隐藏，可在「列设置」中打开；导出 Excel 同步追加这 4 列。';
+    msg += '\n\n随访 4 列（末次随访 / 用药状态 / 减停药原因 / 用药问题）默认隐藏，可在「列显隐」中打开；导出 Excel 同步追加这 4 列。';
     alert(msg);
   };
   reader.readAsArrayBuffer(file);
@@ -3066,7 +3067,7 @@ var TIPS = {
   '#btnImport': ['导入新数据', '选择新的销售底表 Excel 文件。<br>配合左边的模式：<b>全量替换</b>＝用完整底表重灌（推荐，能修正历史错误）；<b>增量追加</b>＝只合并新数据，自动跳过已有记录。<br>也可以直接把文件拖到页面任意位置（<b>随访任务表拖进来也会自动识别</b>走随访导入）。'],
   '#btnBak': ['导出备份（含数据池）', '下载一个 JSON 文件，包含<b>全部销售记录</b>＋所有填过的临床诊断、备注、备注日期。<br><b>这是唯一的安全网</b>：清理浏览器数据、换电脑、重装系统都会丢失本地数据，建议每月导出一次存到网盘。'],
   '#btnRes': ['导入备份', '把之前导出的 JSON 备份装回来，恢复销售数据和填写内容。<br>换电脑时：先在新电脑打开工作台，再点这里选备份文件。'],
-  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>也可以直接把随访文件<b>拖到页面任意位置</b>，自动识别为随访导入。<br>导入后明细表新增 4 列（默认隐藏，在「列设置」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
+  '#btnFuv': ['导入随访数据', '导入随访平台导出的随访任务表（.xlsx/.xls），<b>按品种自动分拣</b>：任务行按各品种识别词归入对应数据池，再按<b>打码电话＋姓氏</b>匹配患者，一次导入更新全部品种，无需患者编号、无需提前切换品种。<br>已兼容多种导出格式：<b>瑞福</b>两种表 / <b>诺倍戈</b> / <b>博瑞纳</b>（99 列历史任务，混品种自动过滤），表头自动识别。<br>也可以直接把随访文件<b>拖到页面任意位置</b>，自动识别为随访导入。<br>导入后明细表新增 4 列（默认隐藏，在「列显隐」打开）：末次随访 / 用药状态 / 减停药原因 / 用药问题/反馈；<b>导出 Excel 同步追加这 4 列</b>（共 20 列）。<br>注意：随访只会匹配「已建档品种」的销售数据池；随访表里出现还没建档的品种任务会自动跳过并在提示中注明。'],
   '#btnCsv': ['导出 Excel', '把<b>当前筛选出来</b>的患者导出成 Excel 表格。<br>勾选了左上角「<b>姓名/电话/医生脱敏</b>」时，导出的姓名、电话和医生姓名会同步脱敏（医生保留姓+*）。'],
   '#btnSnap': ['📸 快照', '选择<b>品种、药房</b>和<b>是否脱敏</b>，把患者导出成单文件只读 HTML 分享给别人。<br>浏览器双击打开即看；文件不含可编辑数据。'],
   '#btnClearPool': ['清空数据池', '删除浏览器里保存的<b>全部销售记录</b>，回到刚打开的空白状态，需要重新导入底表。<br><b>不会删除</b>你填的临床诊断和备注。'],
@@ -3253,6 +3254,30 @@ $('#fuFile').onchange = function(){
 };
 
 $('#mask').onchange = function(){ renderTable(); renderRecall(); };
+/* 脱敏胶囊切换：驱动隐藏的 #mask 总开关（导出 Excel/快照分享/专项页全部沿用其 checked，行为不变） */
+function syncMaskSeg(){
+  var on = $('#mask').checked;
+  var bOn = document.querySelector('#maskSeg [data-mv="on"]');
+  var bOff = document.querySelector('#maskSeg [data-mv="off"]');
+  if (bOn) bOn.classList.toggle('on', on);
+  if (bOff) bOff.classList.toggle('on', !on);
+}
+Array.prototype.forEach.call(document.querySelectorAll('#maskSeg button'), function(b){
+  b.onclick = function(){
+    var on = b.getAttribute('data-mv') === 'on';
+    if ($('#mask').checked === on) return;
+    $('#mask').checked = on;
+    syncMaskSeg();
+    $('#mask').dispatchEvent(new Event('change', { bubbles: true }));
+  };
+});
+syncMaskSeg();
+/* 列显隐按钮：展开/收起 chip 勾选行 */
+$('#btnColChips').onclick = function(){
+  var r = $('#colChipRow');
+  r.hidden = !r.hidden;
+  this.textContent = r.hidden ? '列显隐 ▾' : '列显隐 ▴';
+};
 $('#noNeg').onchange = recompute;
 $('#q').oninput = renderTable;
 ['#fStatus','#fHosp','#fWinFrom','#fWinTo','#fFirstFrom','#fFirstTo','#fFill','#fNoteFrom','#fNoteTo','#fFuFrom','#fFuTo'].forEach(function(s){ $(s).onchange = renderTable; });
@@ -4128,7 +4153,7 @@ var TOUR = [
   { t: '筛选区', d: '状态、药房、医院、购药日期等条件可以叠加使用。比如「某药房 + 断药预警」= 这家店里快断药、要联系回购的人。', sel: '#fStatus' },
   { t: '统计卡', d: '在治 / 断药预警 / 脱落人数一眼看清。点卡片可以直接筛出对应的那批患者。', sel: '#kpis' },
   { t: '患者明细表', d: '一行一位患者。部分格子可以直接点击填写：临床诊断、备注、预计下次购药日期、用药周期——填完自动保存，填错了点「撤回」。', sel: '#tb' },
-  { t: '列设置', d: '表格太宽？点「列设置 ▾」自由勾选想看的列：用不到的随访列、支付方式等都可以关掉，选择会自动记住，下次打开还是你的配置。', sel: function(){ var el = document.querySelector('#colSetD'); return el || null; } },
+  { t: '列显隐', d: '表格太宽？点「列显隐 ▾」打开勾选行，点一下 chip 就切换该列显隐：用不到的随访列、支付方式等都可以关掉，选择会自动记住，下次打开还是你的配置。', sel: function(){ var el = document.querySelector('#btnColChips'); return el || null; } },
   { t: '整体小结', d: '下面的蓝色数字全部可以点击：弹出这个指标的患者明细，还能一键导出名单；点「周期」的日历按钮，第 1 次点击选开始、第 2 次点击选结束日期，也能用上周/本周/下周快捷切换。导入数据后这里才有统计。', sel: '#sumCard' },
   { t: '导出 Excel', d: '最后一步：点「导出 Excel」，把当前患者的用药信息（购药时间/数量、理论下次购药、存续状态、诊断、备注等）导成表格留档或发给药师。姓名/电话跟随脱敏开关，发出去之前记得先开脱敏。', sel: function(){ var el = document.querySelector('#btnCsv'); return el || null; } },
   { t: '完成！', d: '点「导入新数据」选择药房系统的销售 Excel，就能开始用了。更详细的图文教程，见配套的「工作台使用教程.html」。', sel: null }
